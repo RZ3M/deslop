@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Deslop</title>
+  <link rel="stylesheet" href="../ui/base.css">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img class="logo" src="../../icons/icon48.png" alt="">
+    <div class="title">
+      <strong>Deslop</strong>
+      <span class="muted" id="subtitle">Slop filter for X &amp; LinkedIn</span>
+    </div>
+    <label class="switch" title="Turn Deslop on or off">
+      <input type="checkbox" id="enabled" aria-label="Enabled">
+      <span></span>
+    </label>
+  </header>
+
+  <div id="notice" class="notice" hidden></div>
+
+  <section class="stats">
+    <div><b id="hiddenToday">0</b><span>hidden today</span></div>
+    <div><b id="checksToday">0</b><span>posts checked</span></div>
+    <div><b id="spendToday">$0</b><span>spent today</span></div>
+  </section>
+
+  <section class="controls">
+    <div class="row">
+      <span>Strictness</span>
+      <div class="segmented" id="strictness">
+        <button data-value="relaxed">Relaxed</button>
+        <button data-value="balanced">Balanced</button>
+        <button data-value="strict">Strict</button>
+      </div>
+    </div>
+    <div class="row">
+      <span>Filter on</span>
+      <div class="platforms">
+        <label><span class="switch"><input type="checkbox" data-platform="x"><span></span></span> X</label>
+        <label><span class="switch"><input type="checkbox" data-platform="linkedin"><span></span></span> LinkedIn</label>
+      </div>
+    </div>
+  </section>
+
+  <section class="recent">
+    <h2>Recently hidden</h2>
+    <ul id="recent"></ul>
+    <p id="empty" class="muted empty">Nothing hidden yet. Scroll X or LinkedIn and slop will quietly disappear.</p>
+  </section>
+
+  <footer>
+    <button class="btn" id="openOptions">Settings</button>
+    <span class="muted" id="cacheInfo"></span>
+  </footer>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

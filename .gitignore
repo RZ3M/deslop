@@ -1,0 +1,14 @@
+# Secrets: never commit API keys
+.env
+.env.*
+config.local.json
+
+# Local tooling
+.claude/
+*.zip
+*.crx
+*.pem
+dist/
+node_modules/
+.DS_Store
+Thumbs.db

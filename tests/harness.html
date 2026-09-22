@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Deslop classifier harness</title>
+  <style>
+    body { font: 13px/1.4 system-ui, sans-serif; margin: 16px; background: #fff; color: #111; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border-bottom: 1px solid #ddd; padding: 4px 6px; text-align: left; vertical-align: top; }
+    td.num { font-variant-numeric: tabular-nums; text-align: right; }
+    .hit { background: #fde2e2; font-weight: 600; }
+    .pass { color: #0a7a2f; font-weight: 700; }
+    .fail { color: #b00020; font-weight: 700; }
+    .text { max-width: 360px; white-space: pre-wrap; color: #444; }
+    #summary { font-size: 15px; margin: 8px 0 16px; }
+  </style>
+</head>
+<body>
+  <h1>Deslop classifier harness</h1>
+  <p>Runs <code>tests/fixtures.js</code> through the same <code>src/lib</code> code the extension uses, against the live Jev API.
+    Needs <code>config.local.json</code> at the repo root (run <code>scripts/import-env-key.ps1</code>).</p>
+  <label>Strictness
+    <select id="strictness">
+      <option>relaxed</option><option selected>balanced</option><option>strict</option>
+    </select>
+  </label>
+  <div id="summary">Running…</div>
+  <table id="out"></table>
+  <script type="module" src="harness.js"></script>
+</body>
+</html>

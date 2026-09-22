@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Deslop settings</title>
+  <link rel="stylesheet" href="../ui/base.css">
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <header class="page-head">
+      <img class="logo big" src="../../icons/icon128.png" alt="">
+      <div>
+        <h1>Deslop</h1>
+        <p class="muted">Hides engagement bait, AI slop, recycled news and posts from countries you pick on X and LinkedIn.
+          Every post is judged by <a href="https://openrouter.ai/~typesafe/jev-latest" target="_blank" rel="noopener">Jev</a>, a model that answers typed questions with calibrated probabilities.</p>
+      </div>
+      <span id="saved" class="saved" aria-live="polite"></span>
+    </header>
+
+    <section class="card">
+      <h2>OpenRouter API key</h2>
+      <p class="muted">Stored only in this browser (<code>chrome.storage.local</code>) and sent only to openrouter.ai.
+        Each post costs roughly $0.0001 to check. <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">Get a key</a></p>
+      <div class="key-row">
+        <input type="password" id="apiKey" placeholder="sk-or-v1-…" autocomplete="off" spellcheck="false">
+        <button class="btn" id="toggleKey" type="button">Show</button>
+        <button class="btn primary" id="testKey" type="button">Save &amp; test</button>
+      </div>
+      <p id="keyStatus" class="status"></p>
+      <details>
+        <summary>Advanced</summary>
+        <label class="field">Model
+          <input type="text" id="model" spellcheck="false">
+        </label>
+        <p class="muted small">Defaults to <code>~typesafe/jev-latest</code>, which always points at the newest Jev.</p>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2>What to hide</h2>
+      <div id="categories" class="toggles"></div>
+
+      <h3>Strictness</h3>
+      <div class="segmented wide" id="strictness">
+        <button data-value="relaxed">Relaxed</button>
+        <button data-value="balanced">Balanced</button>
+        <button data-value="strict">Strict</button>
+      </div>
+      <p class="muted small" id="strictnessHelp"></p>
+
+      <h3>Behaviour</h3>
+      <div class="toggles">
+        <label class="toggle">
+          <span class="switch"><input type="checkbox" id="platform-x"><span></span></span>
+          <span><b>Filter X</b><small>x.com timelines, replies and search</small></span>
+        </label>
+        <label class="toggle">
+          <span class="switch"><input type="checkbox" id="platform-linkedin"><span></span></span>
+          <span><b>Filter LinkedIn</b><small>Your LinkedIn home feed</small></span>
+        </label>
+        <label class="toggle">
+          <span class="switch"><input type="checkbox" id="hideWhileChecking"><span></span></span>
+          <span><b>Blur posts while they're checked</b><small>Stops slop from flashing on screen (usually under half a second)</small></span>
+        </label>
+        <label class="toggle">
+          <span class="switch"><input type="checkbox" id="collapse"><span></span></span>
+          <span><b>Leave a placeholder</b><small>Show a thin "Deslop hid a post" bar with a Show button instead of removing posts completely</small></span>
+        </label>
+        <label class="toggle">
+          <span class="switch"><input type="checkbox" id="hidePromoted"><span></span></span>
+          <span><b>Hide promoted posts</b><small>Ads marked "Ad" or "Promoted"</small></span>
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Your own rules</h2>
+      <p class="muted">Describe anything else you never want to see, in plain English. Jev checks every post against each rule.</p>
+      <ul id="rules" class="rules"></ul>
+      <form id="addRule" class="add-row">
+        <input type="text" id="newRule" placeholder="e.g. Crypto or memecoin promotion" maxlength="200">
+        <button class="btn" type="submit">Add rule</button>
+      </form>
+
+      <div class="two-col">
+        <label class="field">Muted words
+          <textarea id="mutedWords" rows="4" placeholder="One per line. Posts containing these are hidden without asking Jev."></textarea>
+        </label>
+        <label class="field">Never hide these accounts
+          <textarea id="allowlist" rows="4" placeholder="One per line: @handle on X, or the profile slug from linkedin.com/in/slug"></textarea>
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Block countries</h2>
+      <p class="muted">Hide posts from accounts based in these countries or regions.
+        On X this uses the <em>Account based in</em> line from each account's About page. On LinkedIn it uses the location on the author's profile.</p>
+
+      <div id="blockedChips" class="chips"></div>
+      <input type="search" id="countrySearch" placeholder="Search countries and regions…" autocomplete="off">
+      <ul id="countryList" class="country-list" role="listbox" aria-label="Countries and regions"></ul>
+
+      <div class="toggles">
+        <label class="toggle">
+          <span class="switch"><input type="checkbox" id="countriesOnX"><span></span></span>
+          <span><b>Apply on X</b><small>Looks up each new account once, then caches it for 45 days. X allows about 50 lookups per 15 minutes, so a brand-new feed fills in gradually.</small></span>
+        </label>
+        <label class="toggle">
+          <span class="switch"><input type="checkbox" id="countriesOnLinkedIn"><span></span></span>
+          <span><b>Apply on LinkedIn</b><small>Reads the location from each author's profile page (once, then cached; at most 300 per day).
+            <strong>LinkedIn may count this as a profile view.</strong> Switch LinkedIn's profile viewing mode to private if you don't want to appear in "Who viewed your profile".</small></span>
+        </label>
+        <label class="toggle">
+          <span class="switch"><input type="checkbox" id="includeRegions"><span></span></span>
+          <span><b>Also hide region-only accounts</b><small>Some X accounts only show a region such as "South Asia". Hide them if that region contains a country you blocked.</small></span>
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Data</h2>
+      <p class="muted" id="dataInfo"></p>
+      <div class="add-row">
+        <button class="btn" id="clearCache" type="button">Clear cached verdicts</button>
+        <button class="btn" id="resetSettings" type="button">Reset settings</button>
+      </div>
+    </section>
+
+    <footer class="muted small">
+      Deslop is open source. <a href="https://github.com/RZ3M/deslop" target="_blank" rel="noopener">github.com/RZ3M/deslop</a>
+    </footer>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

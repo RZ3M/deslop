@@ -1,0 +1,44 @@
+[data-deslop='hidden'] {
+  display: none !important;
+}
+
+[data-deslop='pending'] {
+  filter: blur(6px) saturate(0.4);
+  opacity: 0.45;
+  pointer-events: none;
+  transition: filter 0.15s ease, opacity 0.15s ease;
+}
+
+[data-deslop='collapsed'] > :not(.deslop-bar) {
+  display: none !important;
+}
+
+.deslop-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font: 13px/1.35 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: rgb(113, 118, 123);
+  background: rgba(127, 127, 127, 0.08);
+  border: 1px dashed rgba(127, 127, 127, 0.35);
+}
+
+.deslop-bar button {
+  flex: none;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  background: transparent;
+  border: 1px solid rgba(127, 127, 127, 0.45);
+  border-radius: 999px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.deslop-bar button:hover {
+  background: rgba(127, 127, 127, 0.15);
+}
