@@ -7,12 +7,12 @@ Engagement bait, AI-written filler, hate and abuse, recycled news, clickbait hoo
 Every post is judged by <a href="https://openrouter.ai/~typesafe/jev-latest">Jev</a>, TypeSafe's decision model, through OpenRouter.</p>
 
 <p align="center">
-  <img src="docs/timeline.png" width="420" alt="An X timeline with three slop posts replaced by Deslop placeholders">
+  <img src="docs/timeline.png" width="420" alt="An X timeline with two slop posts replaced by Deslop placeholders and one revealed post with a Hide again button">
   &nbsp;
-  <img src="docs/popup.png" width="300" alt="The Deslop popup: stats, strictness and recently hidden posts">
+  <img src="docs/popup.png" width="300" alt="The Deslop popup: on/off, strictness, platforms and placeholders on top, recently hidden posts below">
 </p>
 
-<p align="center"><sub>Placeholder mode shown so you can see what was caught. By default, slop is removed completely.</sub></p>
+<p align="center"><sub>By default a hidden post leaves a placeholder. <b>Show</b> reveals it, marked in yellow with a <b>Hide again</b> button.</sub></p>
 
 ## What it hides
 
@@ -57,6 +57,10 @@ Every filter works the same whatever language a post is written in:
 - Word counting uses `Intl.Segmenter`, so Chinese, Japanese and Thai posts (written without spaces) aren't skipped as "too short".
 - Muted words match in scripts without spaces (Chinese, Japanese, Thai, Korean), treat full-width letters as normal ones (`ＢＴＣ` = `btc`), and keep accents meaningful (`año` ≠ `ano`).
 - "Ad" / "Promoted" labels are recognised in about 40 interface languages.
+
+### Placeholders
+
+By default, a hidden post leaves a thin *Deslop hid a post* bar with the reasons and a **Show** button, so you can see what was caught. A post you show gets a yellow edge and a **Shown** tag so it stands out from the rest of your feed, plus a **Hide again** button. Switch **Placeholders** off in the popup to remove slop completely instead.
 
 ### Muted words
 
@@ -189,7 +193,7 @@ pwsh scripts/serve.ps1                   # http://localhost:8787
 | --- | --- | --- |
 | `/tests/unit.html` | Place matching, blocking rules, verdict composition, custom rules, focus mode, per-question caching, fancy fonts, word counts and muted words in many scripts, limiter (offline) | 33/33 |
 | `/tests/e2e-x-offline.html` | Real `background.js` + content scripts on a mock X timeline without Jev: muted word forms, ad labels in other languages, fancy fonts, "Not interested" feedback | 16/16 |
-| `/tests/e2e-linkedin-offline.html` | Same on a mock LinkedIn feed: hidden posts don't flicker as the page changes, and "Show" keeps a post shown, in both hide modes | 15/15 |
+| `/tests/e2e-linkedin-offline.html` | Same on a mock LinkedIn feed: hidden posts don't flicker as the page changes, "Show" reveals a post and "Hide again" collapses it, in both hide modes | 19/19 |
 | `/tests/harness.html` | 54 labelled posts (incl. hate, quoted hate, LinkedInfluencers, 8 languages) through the live model, at each strictness | 33/33 at Balanced on the original 33; new cases not yet run |
 | `/tests/e2e-x.html` | Real `background.js` + content scripts on a mock X timeline, live Jev | 9/9 before the new cases; not yet re-run |
 | `/tests/e2e-linkedin.html` | Same for LinkedIn, including profile-location parsing and author detection | 9/9 |
