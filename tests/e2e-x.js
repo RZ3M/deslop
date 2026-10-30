@@ -82,13 +82,13 @@ log(`API key imported from config.local.json: ${apiKey ? 'yes' : 'NO'}`);
 
 await chrome.storage.sync.set({
   settings: {
-    countries: { blocked: ['IN'], includeRegions: false, onX: true, onLinkedIn: true },
+    countries: { blocked: ['CA'], includeRegions: false, onX: true, onLinkedIn: true },
     customRules: ['Crypto, NFT or memecoin promotion'],
     allowlist: ['@me_myself'],
   },
 });
-const seeded = await chrome.runtime.sendMessage({ type: 'geo:put', platform: 'x', key: 'priya_dev', raw: 'India' });
-log(`Seeded @priya_dev as "India": blocked=${seeded.result.blocked} label=${seeded.result.label}`);
+const seeded = await chrome.runtime.sendMessage({ type: 'geo:put', platform: 'x', key: 'priya_dev', raw: 'Canada' });
+log(`Seeded @priya_dev as "Canada": blocked=${seeded.result.blocked} label=${seeded.result.label}`);
 
 timeline.innerHTML = TWEETS.map(tweetHtml).join('');
 await loadScript('../src/content/common.js');

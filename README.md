@@ -33,7 +33,7 @@ Every post is judged by <a href="https://openrouter.ai/~typesafe/jev-latest">Jev
 | Topics & selling | **Sales pitches** | "My cohort opens tomorrow, DM me IN" | Off |
 | | **Get-rich-quick & crypto pumps** | "$30k/month passive income", "this memecoin is about to 100x" | Off |
 | | **Politics** | Elections, politicians, policy fights, culture-war debates | Off |
-| | **Your own rules** | Anything you describe, e.g. *"Crypto or memecoin promotion"*. Matched on meaning: *India* also catches *Indian*, *Mumbai* or *भारत* | — |
+| | **Your own rules** | Anything you describe, e.g. *"Crypto or memecoin promotion"*. Matched on meaning: *Canada* also catches *Canadian*, *Toronto* or *加拿大* | — |
 | | **Focus mode** | Everything that isn't about the interests you list (see below) | Off |
 | | **Countries / regions** | Accounts based in countries or regions you pick | — |
 
@@ -60,7 +60,7 @@ Every filter works the same whatever language a post is written in:
 
 ### Muted words
 
-Muted words hide posts instantly, without asking Jev. They match whole words and their forms: a word of four or more letters also matches words up to three letters longer, so `india` mutes *Indian* and *Indians*. Write `crypto*` to match any word starting with *crypto*, or put a word in double quotes (`"ai"`) to match only that exact word.
+Muted words hide posts instantly, without asking Jev. They match whole words and their forms: a word of four or more letters also matches words up to three letters longer, so `canadian` mutes *Canadians*. Write `crypto*` to match any word starting with *crypto*, or put a word in double quotes (`"ai"`) to match only that exact word.
 
 ### Focus your feed
 

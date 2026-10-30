@@ -6,12 +6,12 @@ window.__shim.reset();
 const person = (slug, name) => `https://www.linkedin.com/in/${slug}/`;
 const CARDS = [
   {
-    id: 'priya', expect: 'hidden', why: 'country (profile says India)',
+    id: 'priya', expect: 'hidden', why: 'country (profile says Canada)',
     header: `<a href="${person('priya-sharma')}"><img alt=""></a><a href="${person('priya-sharma')}">Priya Sharma<br> • 2nd</a><p>Senior Frontend Engineer</p><p>1d •</p>`,
     text: 'We moved our design system to CSS layers this quarter. Specificity bugs in the checkout flow dropped from about 30 a month to 2.',
   },
   {
-    id: 'sam', expect: 'shown', why: 'Bay Area resolved by Jev as not India',
+    id: 'sam', expect: 'shown', why: 'Bay Area resolved by Jev as not Canada',
     header: `<a href="${person('sam-lee')}"><img alt=""></a><a href="${person('sam-lee')}">Sam Lee<br> • 1st</a><p>Staff Engineer at Contoso</p><p>3h •</p>`,
     text: 'Wrote up how we cut p99 latency on our ledger service by moving idempotency checks out of the hot path. Happy to answer questions.',
   },
@@ -63,7 +63,7 @@ report.textContent = 'Loading background.js…';
 await import('../src/background.js');
 await window.__shim.fireInstalled('install');
 await chrome.storage.sync.set({
-  settings: { hidePromoted: true, countries: { blocked: ['IN'], includeRegions: false, onX: true, onLinkedIn: true } },
+  settings: { hidePromoted: true, countries: { blocked: ['CA'], includeRegions: false, onX: true, onLinkedIn: true } },
 });
 
 await loadScript('../src/content/common.js');
@@ -94,7 +94,7 @@ const authorOk = lookedUp.some((s) => s.startsWith('dan-p')) && !lookedUp.some((
 log(`${authorOk ? '✓' : '✗'} "commented" card looked up the post author, not the commenter`);
 const skipOk = !lookedUp.some((s) => s.startsWith('mark-t'));
 log(`${skipOk ? '✓' : '✗'} no profile lookup for a post already hidden as slop`);
-const parseOk = geo['linkedin:priya-sharma']?.v.raw === 'Bengaluru, Karnataka, India' && geo['linkedin:sam-lee']?.v.raw === 'San Francisco Bay Area';
+const parseOk = geo['linkedin:priya-sharma']?.v.raw === 'Toronto, Ontario, Canada' && geo['linkedin:sam-lee']?.v.raw === 'San Francisco Bay Area';
 log(`${parseOk ? '✓' : '✗'} locations parsed from profile HTML`);
 
 const total = CARDS.length + 3;

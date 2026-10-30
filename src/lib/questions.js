@@ -415,7 +415,7 @@ function anyLanguage(q) {
 }
 
 // A custom rule is the user's own description of posts to hide. Rules are
-// matched on meaning, so "India" also catches "Indian", "Mumbai" or "भारत".
+// matched on meaning, so "Canada" also catches "Canadian", "Toronto" or "加拿大".
 export function customRuleQuestion(rule) {
   return {
     type: 'noul',
@@ -423,7 +423,7 @@ export function customRuleQuestion(rule) {
       rule,
       question: "Does `post`, including any post it quotes, fit the user's filter `rule`?",
       focus:
-        'Follow the rule as worded. If it asks for posts that mention something, any mention counts, even in passing; otherwise the post should be about it or of that kind. Match on meaning, not exact words: related word forms (India, Indian, Indians), demonyms, synonyms, translations, hashtags, nicknames and obvious specifics count, so a rule about a country also covers its people, cities, leaders and languages.',
+        'Follow the rule as worded. If it asks for posts that mention something, any mention counts, even in passing; otherwise the post should be about it or of that kind. Match on meaning, not exact words: related word forms (Canada, Canadian, Canadians), demonyms, synonyms, translations, hashtags, nicknames and obvious specifics count, so a rule about a country also covers its people, cities, leaders and languages.',
       language: ANY_LANGUAGE,
     },
     criteria: {
