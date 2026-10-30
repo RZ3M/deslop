@@ -1,4 +1,4 @@
-[data-deslop='hidden'] {
+html:not(.deslop-probe) [data-deslop='hidden'] {
   display: none !important;
 }
 
@@ -9,7 +9,7 @@
   transition: filter 0.15s ease, opacity 0.15s ease;
 }
 
-[data-deslop='collapsed'] > :not(.deslop-bar) {
+html:not(.deslop-probe) [data-deslop='collapsed'] > :not(.deslop-bar) {
   display: none !important;
 }
 
@@ -44,10 +44,17 @@
 }
 
 /* A post the user chose to see: a yellow edge and tint set it apart from the
-   rest of the feed, and its bar offers "Hide again". */
+   rest of the feed, and its bar offers "Hide again". The tint is layered over
+   the post's own background rather than replacing it, so elements painted in
+   that background (LinkedIn's "…more" button) can take the same layer. */
 [data-deslop='revealed'] {
+  --deslop-tint: linear-gradient(rgba(255, 204, 77, 0.1), rgba(255, 204, 77, 0.1));
   box-shadow: inset 4px 0 0 #ffcc4d;
-  background-color: rgba(255, 204, 77, 0.07) !important;
+  background-image: var(--deslop-tint) !important;
+}
+
+[data-deslop='revealed'] [data-testid='expandable-text-button'] {
+  background-image: var(--deslop-tint) !important;
 }
 
 [data-deslop='revealed'] > .deslop-bar {
