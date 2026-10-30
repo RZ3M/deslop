@@ -40,7 +40,7 @@ const code = (raw) => {
 
 await test('X country names', () => {
   eq(code('United States'), 'US');
-  eq(code('India'), 'IN');
+  eq(code('Canada'), 'CA');
   eq(code('United Kingdom'), 'GB');
   eq(code('Türkiye'), 'TR');
   eq(code('Turkey'), 'TR');
@@ -58,7 +58,7 @@ await test('X region names', () => {
 
 await test('LinkedIn places', () => {
   eq(code('Toronto, Ontario, Canada'), 'CA');
-  eq(code('Bengaluru, Karnataka, India'), 'IN');
+  eq(code('Vancouver, British Columbia, Canada'), 'CA');
   eq(code('London, England, United Kingdom'), 'GB');
   eq(code('Greater Toronto Area, Canada'), 'CA');
   eq(code('Austin, Texas'), 'US');
@@ -82,18 +82,18 @@ await test('Georgia alone is the country', () => {
 });
 
 await test('blocking countries and regions', () => {
-  const india = matchPlace('India');
-  const southAsia = matchPlace('South Asia');
+  const canada = matchPlace('Canada');
+  const northAmerica = matchPlace('North America');
   const germany = matchPlace('Germany');
-  eq(isBlockedPlace(india, ['IN'], false), true);
-  eq(isBlockedPlace(germany, ['IN'], false), false);
-  eq(isBlockedPlace(southAsia, ['IN'], false), false, 'region-only accounts kept by default');
-  eq(isBlockedPlace(southAsia, ['IN'], true), true, 'region-only accounts hidden when opted in');
+  eq(isBlockedPlace(canada, ['CA'], false), true);
+  eq(isBlockedPlace(germany, ['CA'], false), false);
+  eq(isBlockedPlace(northAmerica, ['CA'], false), false, 'region-only accounts kept by default');
+  eq(isBlockedPlace(northAmerica, ['CA'], true), true, 'region-only accounts hidden when opted in');
   eq(isBlockedPlace(germany, ['region:europe'], false), true, 'blocked region covers its countries');
   eq(isBlockedPlace(matchPlace('Europe'), ['region:europe'], false), true);
   eq(isBlockedPlace(matchPlace('Egypt'), ['region:middle-east'], false), true);
-  eq(isBlockedPlace(null, ['IN'], true), false);
-  eq(isBlockedPlace(india, [], true), false);
+  eq(isBlockedPlace(null, ['CA'], true), false);
+  eq(isBlockedPlace(canada, [], true), false);
 });
 
 await test('country data is consistent', () => {
@@ -297,8 +297,8 @@ await test('muted words in any language', () => {
   eq(m('今日は仮想通貨の話', ['仮想通貨']), '仮想通貨');
   eq(m('비트코인은 오늘 올랐다', ['비트코인']), '비트코인', 'Korean particles');
   eq(m('ราคาบิทคอยน์วันนี้', ['บิทคอยน์']), 'บิทคอยน์', 'Thai has no spaces');
-  eq(m('भारत की टीम', ['भारत']), 'भारत');
-  eq(m('भारतीय टीम जीती', ['भारत']), 'भारत', 'Devanagari forms (Indian)');
+  eq(m('कनाडा की टीम', ['कनाडा']), 'कनाडा');
+  eq(m('कनाडाई टीम जीती', ['कनाडा']), 'कनाडा', 'Devanagari forms (Canadian)');
   eq(m('Buy ＢＴＣ now', ['btc']), 'btc', 'full-width letters');
   eq(m('عملة البيتكوين اليوم', ['البيتكوين']), 'البيتكوين');
   eq(findMutedWord({ text: 'lol', quoted: { text: 'crypto giveaway' } }, ['crypto']), 'crypto', 'quoted posts too');
@@ -306,9 +306,9 @@ await test('muted words in any language', () => {
 
 await test('muted words catch word forms', () => {
   const m = (text, words) => findMutedWord({ text }, words) || null;
-  eq(m('Indian startups raised $2B', ['india']), 'india', 'demonym');
-  eq(m('Indians abroad', ['India']), 'India');
-  eq(m('#IndiaVsPakistan tonight', ['india']), null, 'too far from the word');
+  eq(m('Canadians abroad', ['canadian']), 'canadian', 'plural');
+  eq(m('CANADIANS abroad', ['Canadian']), 'Canadian', 'any case');
+  eq(m('#CanadaVsMexico tonight', ['canada']), null, 'too far from the word');
   eq(m('Cryptocurrency is back', ['crypto']), null, 'more than 3 extra letters');
   eq(m('Cryptocurrency is back', ['crypto*']), 'crypto*', 'wildcard');
   eq(m('Aim higher', ['ai']), null, 'short words are whole words only');

@@ -5,8 +5,8 @@ window.__shim.reset();
 const FOR_YOU = (label) => [label, 'Follow @someone', 'Add/remove from Lists', 'Mute @someone', 'Block @someone', 'Report post'];
 const TWEETS = [
   {
-    id: '2001', handle: 'founders_in', expect: 'hidden', why: 'muted "india" catches "Indian"',
-    text: 'Indian startups raised a record $4B this quarter, mostly in fintech.',
+    id: '2001', handle: 'founders_ca', expect: 'hidden', why: 'muted "canadian" catches "Canadians"',
+    text: 'Canadians founded a record number of fintech startups this quarter.',
     menu: FOR_YOU('Not interested in this post'), expectClick: 'Not interested in this post',
   },
   {
@@ -21,7 +21,7 @@ const TWEETS = [
   },
   {
     id: '2004', handle: 'following_tab', expect: 'hidden', why: 'muted, but menu has no "Not interested" (Following tab)',
-    text: 'Our Indians cricket fan club meets on Sunday at the usual place.',
+    text: 'Fellow Canadians: our hockey fan club meets on Sunday at the usual place.',
     menu: ['Follow @following_tab', 'Mute @following_tab', 'Block @following_tab'], expectClick: null,
   },
   {
@@ -87,7 +87,7 @@ function loadScript(src) {
 await import('../src/background.js');
 await window.__shim.fireInstalled('update');
 await chrome.storage.sync.set({
-  settings: { mutedWords: ['india', '加密货币'], hidePromoted: true, notInterestedOnX: true },
+  settings: { mutedWords: ['canadian', '加密货币'], hidePromoted: true, notInterestedOnX: true },
 });
 
 timeline.innerHTML = TWEETS.map(tweetHtml).join('');

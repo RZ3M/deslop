@@ -141,7 +141,7 @@ export function hasEnoughText(post) {
 }
 
 // Muted words match whole words and their forms: a word of 4+ letters also
-// matches words up to 3 letters longer ("india" → "indian", "indians").
+// matches words up to 3 letters longer ("canadian" → "canadians").
 // "crypto*" matches any word starting with crypto; "ai" in double quotes
 // matches only the exact word. Scripts that don't put spaces between words
 // (and Korean, which attaches particles to them) match anywhere.
