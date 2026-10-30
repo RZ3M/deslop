@@ -1,14 +1,11 @@
 import { loadSettings, saveSettings } from '../lib/settings.js';
+import { CATEGORIES } from '../lib/questions.js';
 
 const $ = (id) => document.getElementById(id);
 const REASON_LABELS = {
-  engagement_bait: 'Engagement bait',
-  ai_generated: 'AI-generated',
-  news_rehash: 'Recycled news',
-  clickbait: 'Clickbait',
-  hollow_inspiration: 'Broetry',
-  rage_bait: 'Rage bait',
+  ...Object.fromEntries(CATEGORIES.map((c) => [c.id, c.short || c.label])),
   country: 'Country',
+  off_topic: 'Off-focus',
   muted: 'Muted word',
   promoted: 'Promoted',
   custom: 'Custom rule',
@@ -28,7 +25,7 @@ function renderSettings() {
   $('subtitle').textContent = !settings.enabled
     ? 'Paused'
     : on.length
-      ? `Filtering ${on.join(' & ')} · ${cap(settings.strictness)}`
+      ? `Filtering ${on.join(' & ')} · ${cap(settings.strictness)}${settings.focus?.enabled && settings.focus.interests?.length ? ' · Focus on' : ''}`
       : 'No platforms enabled';
 }
 

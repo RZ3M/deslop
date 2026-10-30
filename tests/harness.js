@@ -1,5 +1,5 @@
 import { askJev, createLimiter } from '../src/lib/jev.js';
-import { buildState, buildQuestions, verdictFrom } from '../src/lib/classify.js';
+import { buildState, buildQuestions, verdictFrom, localSignals } from '../src/lib/classify.js';
 import { CATEGORIES } from '../src/lib/questions.js';
 import { FIXTURES } from './fixtures.js';
 
@@ -35,10 +35,12 @@ const answered = await Promise.all(
 const elapsed = Math.round(performance.now() - started);
 
 function render() {
-  const settings = { strictness: strictnessSelect.value, categories: {}, customRules: [] };
+  const strictness = strictnessSelect.value;
   let passed = 0;
   const rows = answered.map((r) => {
-    const v = verdictFrom(r.answers, settings);
+    // Defaults, plus the expected category so off-by-default ones are tested.
+    const categories = r.expect === 'keep' ? {} : { [r.expect]: true };
+    const v = verdictFrom(r.answers, { strictness, categories, customRules: [] }, undefined, localSignals(r.post));
     const hitIds = v.reasons.map((x) => x.id);
     const ok = r.expect === 'keep' ? !v.hide : v.hide;
     const exact = r.expect === 'keep' || hitIds.includes(r.expect);
@@ -46,7 +48,7 @@ function render() {
     return { r, v, ok, exact };
   });
 
-  summary.innerHTML = `<b>${passed}/${answered.length}</b> correct at <b>${settings.strictness}</b> · ${elapsed} ms total · $${cost.toFixed(6)} spent`;
+  summary.innerHTML = `<b>${passed}/${answered.length}</b> correct at <b>${strictness}</b> · ${elapsed} ms total · $${cost.toFixed(6)} spent`;
   const head = `<tr><th>#</th><th>expect</th><th>result</th>${CATEGORIES.map((c) => `<th>${c.id}</th>`).join('')}<th>ms</th><th>tokens</th><th>text</th></tr>`;
   table.innerHTML =
     head +

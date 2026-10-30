@@ -1,11 +1,24 @@
 import { askJev, createLimiter, DEFAULT_MODEL } from './lib/jev.js';
-import { buildState, buildQuestions, questionsHash, verdictFrom, hasEnoughText, fnv1a } from './lib/classify.js';
+import {
+  buildState,
+  questionsFor,
+  missingQuestions,
+  mergeAnswers,
+  questionHash,
+  verdictFrom,
+  hasEnoughText,
+  findMutedWord,
+  localSignals,
+  fnv1a,
+} from './lib/classify.js';
 import { locationQuestion, NO_COUNTRY, COUNTRY_CHOICE_MIN } from './lib/questions.js';
 import { loadSettings, getApiKey, setApiKey } from './lib/settings.js';
 import { PersistentCache } from './lib/cache.js';
 import { matchPlace, isBlockedPlace, getCountry, placeLabel } from './lib/countries.js';
 
-const answersCache = new PersistentCache('cache:answers', { maxEntries: 6000, ttlMs: 14 * 24 * 3600e3 });
+// Answers are cached per post and per question (see missingQuestions), so
+// enabling a category later only asks that category's questions.
+const answersCache = new PersistentCache('cache:answers:v2', { maxEntries: 6000, ttlMs: 14 * 24 * 3600e3 });
 const geoCache = new PersistentCache('cache:geo', { maxEntries: 20000, ttlMs: 45 * 24 * 3600e3 });
 const geoModelCache = new PersistentCache('cache:geoModel', { maxEntries: 5000, ttlMs: 45 * 24 * 3600e3 });
 
@@ -56,42 +69,53 @@ async function classify(post) {
 
   if (settings.hidePromoted && post.promoted) return verdict([{ id: 'promoted', label: 'Promoted', value: 1 }]);
 
+  // Signals computed in code (fancy fonts) can hide a post without asking Jev.
+  const local = localSignals(post);
+  const quick = verdictFrom({}, settings, post.platform, local);
+  if (quick.hide) return verdict(quick.reasons.map(({ id, label, value }) => ({ id, label, value })));
+
   if (!hasEnoughText(post)) return { hide: false, skipped: 'too-short' };
+
+  const questions = questionsFor(settings, post.platform);
+  if (!Object.keys(questions).length) return { hide: false, skipped: 'nothing-enabled' };
 
   const apiKey = await getApiKey();
   if (!apiKey) return { hide: false, skipped: 'no-key' };
 
-  const qhash = questionsHash(settings.customRules);
-  const cacheKey = `${post.platform}:${post.key}:${qhash}`;
-  let answers = await answersCache.get(cacheKey);
+  const cacheKey = `${post.platform}:${post.key}`;
+  let entry = await answersCache.get(cacheKey);
+  const missing = missingQuestions(entry, questions);
 
-  if (!answers) {
-    if (!inflight.has(cacheKey)) {
+  if (Object.keys(missing).length) {
+    const jobKey = `${cacheKey}:${Object.entries(missing).map(([id, q]) => `${id}=${questionHash(q)}`).sort().join(',')}`;
+    if (!inflight.has(jobKey)) {
       const job = limit(() =>
         askJev({
           apiKey,
           model: settings.model || DEFAULT_MODEL,
           state: buildState(post),
-          questions: buildQuestions(settings.customRules),
+          questions: missing,
         }),
       )
         .then(async (res) => {
-          await answersCache.set(cacheKey, res.answers);
+          // Re-read: another job for the same post may have finished meanwhile.
+          const merged = mergeAnswers(await answersCache.get(cacheKey), missing, res.answers);
+          await answersCache.set(cacheKey, merged);
           await recordUsage(res.usage);
-          return res.answers;
+          return merged;
         })
-        .finally(() => inflight.delete(cacheKey));
-      inflight.set(cacheKey, job);
+        .finally(() => inflight.delete(jobKey));
+      inflight.set(jobKey, job);
     }
     try {
-      answers = await inflight.get(cacheKey);
+      entry = await inflight.get(jobKey);
     } catch (err) {
       await recordError(err);
       return { hide: false, skipped: 'error', error: err.message };
     }
   }
 
-  const v = verdictFrom(answers, settings);
+  const v = verdictFrom(entry.answers, settings, post.platform, local);
   return verdict(v.reasons.map(({ id, label, value }) => ({ id, label, value })));
 }
 
@@ -105,17 +129,6 @@ function isAllowlisted(post, allowlist = []) {
     .filter(Boolean)
     .map((s) => s.toLowerCase().replace(/^@/, ''));
   return allowlist.some((a) => ids.includes(a.toLowerCase().trim().replace(/^@/, '')));
-}
-
-function findMutedWord(post, words = []) {
-  if (!words.length) return null;
-  const hay = `${post.text || ''}\n${post.quoted?.text || ''}`.toLowerCase();
-  return words.find((w) => {
-    const needle = w.toLowerCase().trim();
-    if (!needle) return false;
-    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}($|[^\\p{L}\\p{N}])`, 'u').test(hay);
-  });
 }
 
 // ── Country filter ──────────────────────────────────────────────────────────
@@ -259,6 +272,7 @@ async function testKey(candidate) {
 // ── First run ───────────────────────────────────────────────────────────────
 
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
+  if (reason === 'update') await chrome.storage.local.remove('cache:answers'); // pre-0.2 cache format
   await importLocalKey();
   if (reason === 'install' && !(await getApiKey())) chrome.runtime.openOptionsPage();
 });
