@@ -63,7 +63,7 @@ report.textContent = 'Loading background.js…';
 await import('../src/background.js');
 await window.__shim.fireInstalled('install');
 await chrome.storage.sync.set({
-  settings: { hidePromoted: true, countries: { blocked: ['CA'], includeRegions: false, onX: true, onLinkedIn: true } },
+  settings: { hideMode: 'remove', hidePromoted: true, countries: { blocked: ['CA'], includeRegions: false, onX: true, onLinkedIn: true } },
 });
 
 await loadScript('../src/content/common.js');

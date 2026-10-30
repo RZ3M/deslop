@@ -7,54 +7,56 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <header>
-    <img class="logo" src="../../icons/icon48.png" alt="">
-    <div class="title">
-      <strong>Deslop</strong>
-      <span class="muted" id="subtitle">Slop filter for X &amp; LinkedIn</span>
-    </div>
-    <label class="switch" title="Turn Deslop on or off">
-      <input type="checkbox" id="enabled" aria-label="Enabled">
-      <span></span>
-    </label>
-  </header>
+  <div class="top">
+    <header>
+      <img class="logo" src="../../icons/icon48.png" alt="">
+      <div class="title">
+        <strong>Deslop</strong>
+        <span class="muted" id="subtitle">Slop filter for X &amp; LinkedIn</span>
+      </div>
+      <button class="icon-btn" id="openOptions" title="All settings" aria-label="All settings">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+        </svg>
+      </button>
+      <label class="switch" title="Turn Deslop on or off">
+        <input type="checkbox" id="enabled" aria-label="Enabled">
+        <span></span>
+      </label>
+    </header>
 
-  <div id="notice" class="notice" hidden></div>
+    <div id="notice" class="notice" hidden></div>
 
-  <section class="stats">
-    <div><b id="hiddenToday">0</b><span>hidden today</span></div>
-    <div><b id="checksToday">0</b><span>posts checked</span></div>
-    <div><b id="spendToday">$0</b><span>spent today</span></div>
-  </section>
+    <section class="stats" aria-label="Today" title="Today">
+      <div><b id="hiddenToday">0</b><span>hidden</span></div>
+      <div><b id="checksToday">0</b><span>checked</span></div>
+      <div><b id="spendToday">$0</b><span>spent</span></div>
+    </section>
 
-  <section class="controls">
-    <div class="row">
-      <span>Strictness</span>
-      <div class="segmented" id="strictness">
+    <section class="controls">
+      <div class="segmented" id="strictness" role="group" aria-label="Strictness">
         <button data-value="relaxed">Relaxed</button>
         <button data-value="balanced">Balanced</button>
         <button data-value="strict">Strict</button>
       </div>
-    </div>
-    <div class="row">
-      <span>Filter on</span>
-      <div class="platforms">
+      <div class="toggles">
         <label><span class="switch"><input type="checkbox" data-platform="x"><span></span></span> X</label>
         <label><span class="switch"><input type="checkbox" data-platform="linkedin"><span></span></span> LinkedIn</label>
+        <label title="Leave a bar with a Show button where a post was hidden, instead of removing it completely">
+          <span class="switch"><input type="checkbox" id="placeholders"><span></span></span> Placeholders
+        </label>
       </div>
-    </div>
-  </section>
+    </section>
+  </div>
 
   <section class="recent">
-    <h2>Recently hidden</h2>
+    <h2>Recently hidden <span class="muted" id="recentCount"></span></h2>
     <ul id="recent"></ul>
     <p id="empty" class="muted empty">Nothing hidden yet. Scroll X or LinkedIn and slop will quietly disappear.</p>
   </section>
 
-  <footer>
-    <button class="btn" id="openOptions">Settings</button>
-    <span class="muted" id="cacheInfo"></span>
-  </footer>
+  <footer class="muted" id="cacheInfo"></footer>
 
   <script type="module" src="popup.js"></script>
 </body>

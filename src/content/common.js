@@ -235,7 +235,8 @@
 
     function render(el, container, post, decision) {
       clear(container);
-      if (!decision.hide || decision.revealed) return;
+      if (!decision.hide) return;
+      if (decision.revealed) return reveal(container, decision);
 
       if (!reported.has(post.key)) {
         reported.add(post.key);
@@ -254,29 +255,59 @@
         adapter.onHidden?.(el, post, decision);
       }
 
-      if (settings().hideMode === 'collapse') {
-        container.dataset.deslop = 'collapsed';
-        const bar = document.createElement('div');
-        bar.className = 'deslop-bar';
-        const why = decision.reasons
-          .slice(0, 2)
-          .map((r) => (r.id === 'country' || r.value >= 1 ? r.label : `${r.label} ${Math.round(r.value * 100)}%`))
-          .join(' · ');
-        bar.textContent = `Deslop hid a post — ${why}`;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.textContent = 'Show';
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          decision.revealed = true;
-          clear(container);
-        });
-        bar.appendChild(btn);
-        container.prepend(bar);
-      } else {
-        container.dataset.deslop = 'hidden';
+      if (settings().hideMode === 'collapse') collapse(container, decision);
+      else container.dataset.deslop = 'hidden';
+    }
+
+    // Placeholder bar with a Show button. Show and Hide again only change
+    // data-deslop once each, so the post doesn't flicker.
+    function collapse(container, decision) {
+      container.dataset.deslop = 'collapsed';
+      setBar(container, null, `Deslop hid a post — ${why(decision)}`, 'Show', () => {
+        decision.revealed = true;
+        reveal(container, decision);
+      });
+    }
+
+    // A post the user chose to see: marked so it stands out from the feed,
+    // with a button to hide it again.
+    function reveal(container, decision) {
+      container.dataset.deslop = 'revealed';
+      setBar(container, 'Shown', `Deslop hid this — ${why(decision)}`, 'Hide again', () => {
+        decision.revealed = false;
+        collapse(container, decision);
+      });
+    }
+
+    function setBar(container, tag, text, label, onClick) {
+      container.querySelectorAll(':scope > .deslop-bar').forEach((b) => b.remove());
+      const bar = document.createElement('div');
+      bar.className = 'deslop-bar';
+      const msg = document.createElement('span');
+      if (tag) {
+        const pill = document.createElement('b');
+        pill.className = 'deslop-tag';
+        pill.textContent = tag;
+        msg.append(pill, ' ');
       }
+      msg.append(text);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = label;
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      });
+      bar.append(msg, btn);
+      container.prepend(bar);
+    }
+
+    function why(decision) {
+      return decision.reasons
+        .slice(0, 2)
+        .map((r) => (r.id === 'country' || r.value >= 1 ? r.label : `${r.label} ${Math.round(r.value * 100)}%`))
+        .join(' · ');
     }
 
     function clear(container) {
