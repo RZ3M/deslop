@@ -43,7 +43,9 @@
 
     const post = {
       platform: 'linkedin',
-      key: `l${D.hash(`${person || org || name}|${text.slice(0, 500)}`)}`,
+      // innerText reads differently once Deslop hides the card, so the key
+      // comes from the DOM text; otherwise a hidden post looks like a new one.
+      key: `l${D.hash(`${person || org || name}|${stripMore(D.textOf(main)).slice(0, 500)}`)}`,
       author: {
         name,
         slug: person ? decodeURIComponent(person) : org ? decodeURIComponent(org) : undefined,
@@ -61,9 +63,11 @@
   }
 
   function cleanText(box) {
-    return (box.innerText || D.textOf(box))
-      .replace(/…\s*(see )?more\s*$/i, '')
-      .trim();
+    return stripMore(box.innerText || D.textOf(box));
+  }
+
+  function stripMore(text) {
+    return text.replace(/…\s*(see )?more\s*$/i, '').trim();
   }
 
   // Best effort: the line after the author's name is usually their headline.
