@@ -1,0 +1,58 @@
+# Every pull request: manifest checks, offline tests in headless Chrome, and a
+# packaged build you can download from the run's Artifacts and load unpacked.
+# Run it by hand with "live" ticked to also run the tests that call Jev
+# (needs the OPENROUTER_API_KEY repository secret).
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      live:
+        description: Also run the live Jev tests (costs a few cents)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check manifest
+        id: manifest
+        run: echo "version=$(node scripts/check-manifest.mjs)" >> "$GITHUB_OUTPUT"
+
+      - name: Offline tests
+        run: node tests/run.mjs
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+
+      - name: Live tests
+        if: ${{ inputs.live }}
+        run: node tests/run.mjs --live
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+      - name: Package
+        shell: pwsh
+        run: ./scripts/package.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deslop-${{ steps.manifest.outputs.version }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: dist/deslop-${{ steps.manifest.outputs.version }}.zip
+          if-no-files-found: error

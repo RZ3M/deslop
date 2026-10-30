@@ -1,0 +1,86 @@
+# Every push to main is tested and packaged, then:
+#   - the "edge" pre-release is updated with the fresh build, always at
+#     releases/download/edge/deslop-edge.zip
+#   - if manifest.json has a version with no v<version> release yet, that
+#     release is created and marked Latest. Bumping the version is the release.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check manifest
+        id: manifest
+        run: echo "version=$(node scripts/check-manifest.mjs)" >> "$GITHUB_OUTPUT"
+
+      - name: Offline tests
+        run: node tests/run.mjs
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+
+      - name: Package
+        shell: pwsh
+        run: ./scripts/package.ps1
+
+      - name: Publish a release for a new version
+        env:
+          VERSION: ${{ steps.manifest.outputs.version }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "v$VERSION is already released; only the edge build is updated."
+            exit 0
+          fi
+          PREV=$(git tag --list 'v*' --sort=-v:refname | head -1)
+          cat > notes.md <<NOTES
+          **Install:** download \`deslop-$VERSION.zip\`, unzip it, open \`chrome://extensions\`, turn on Developer mode, click **Load unpacked** and pick the unzipped folder. Then paste your OpenRouter API key on the settings page.
+          NOTES
+          gh release create "v$VERSION" "dist/deslop-$VERSION.zip" \
+            --target "$GITHUB_SHA" \
+            --title "Deslop v$VERSION" \
+            --notes-file notes.md \
+            --generate-notes ${PREV:+--notes-start-tag "$PREV"} \
+            --latest
+
+      - name: Update the edge build
+        env:
+          VERSION: ${{ steps.manifest.outputs.version }}
+        run: |
+          cp "dist/deslop-$VERSION.zip" dist/deslop-edge.zip
+          SHORT=${GITHUB_SHA::7}
+          SUBJECT=$(git log -1 --format=%s)
+          cat > edge.md <<NOTES
+          The newest build from \`main\`, rebuilt on every merge. It may be ahead of the latest release and less tested; for everyday use, prefer the release marked **Latest**.
+
+          Built from $SHORT ("$SUBJECT"), manifest version $VERSION.
+          NOTES
+          git tag -f edge "$GITHUB_SHA"
+          git push -f origin refs/tags/edge
+          if gh release view edge >/dev/null 2>&1; then
+            gh release upload edge dist/deslop-edge.zip --clobber
+            gh release edit edge --title "Edge build ($SHORT)" --notes-file edge.md --prerelease --latest=false
+          else
+            gh release create edge dist/deslop-edge.zip --title "Edge build ($SHORT)" --notes-file edge.md --prerelease --latest=false
+          fi
