@@ -167,7 +167,7 @@ src/
   content/linkedin.js    LinkedIn adapter + profile-location lookups
   popup/, options/, ui/  extension UI
 tests/                   browser-based tests, and run.mjs to run them headlessly (see below)
-scripts/                 package.ps1, check-manifest.mjs, serve.ps1, import-env-key.ps1, make-icons.ps1
+scripts/                 package.ps1, check-manifest.mjs, serve.ps1, import-env-key.ps1, make-icons.sh
 .github/workflows/       ci.yml (pull requests), release.yml (main)
 ```
 
