@@ -118,9 +118,9 @@ Raw answers are cached per post and per question for 14 days. Changing strictnes
 
 ### Country filter
 
-- **X** shows an *"Account based in"* line on every account's *About this account* page. Deslop reads the same data x.com loads for that page, from your logged-in tab, once per account (cached for 45 days). X allows roughly 50 of these lookups per 15 minutes; Deslop respects the rate-limit headers, so a brand-new feed fills in gradually. Some accounts only disclose a region (e.g. "South Asia"). Enable *Also hide region-only accounts* to hide those when the region contains a country you blocked.
+- **X** shows an *"Account based in"* line on every account's *About this account* page. Deslop reads the same data x.com loads for that page, from your logged-in tab, once per account (cached for 45 days). X allows roughly 50 of these lookups per 15 minutes; Deslop respects the rate-limit headers, so a brand-new feed fills in gradually. Some accounts only disclose a region (e.g. "North America"). Enable *Also hide region-only accounts* to hide those when the region contains a country you blocked.
 - **LinkedIn** doesn't show location in the feed, so Deslop reads the location line from the author's profile page (streaming only the first ~60 KB, at most 300 profiles a day, cached for 45 days). ⚠️ **LinkedIn may count this as a profile view.** If you don't want to show up in "Who viewed your profile", switch LinkedIn's profile viewing mode to private, or turn off *Apply on LinkedIn*.
-- Places like "Toronto, Ontario, Canada" are matched in code. Vague ones like "Greater Chennai Area" or "Atlanta, Georgia" are resolved by asking Jev which of *your blocked countries* (if any) the place is in.
+- Places like "Toronto, Ontario, Canada" are matched in code. Vague ones like "Golden Horseshoe" or "Atlanta, Georgia" are resolved by asking Jev which of *your blocked countries* (if any) the place is in.
 - Lookups only run for posts that pass the slop check, so hidden posts never cost a lookup.
 
 ## Install

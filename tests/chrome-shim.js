@@ -40,7 +40,7 @@
       { platform: 'x', author: 'Growth Guru', handle: '@growthguru', snippet: 'I found a Claude prompt that writes a month of content in 10 minutes. The prompt is in the replies 👇', reasonId: 'engagement_bait', reasons: [{ label: 'Engagement bait', value: 0.99 }], at: now - 60e3 },
       { platform: 'linkedin', author: 'Mark T.', snippet: "In today's fast-paced digital landscape, leadership isn't about having all the answers — it's about asking the right questions. 🚀 Embrace uncertainty", reasonId: 'ai_generated', reasons: [{ label: 'AI-generated writing', value: 1 }], at: now - 120e3 },
       { platform: 'x', author: 'AI Daily Brief', handle: '@aidailybrief', snippet: 'AI news you missed this week 🧵 1. OpenAI released a new reasoning model 2. Google updated Gemini', reasonId: 'news_rehash', reasons: [{ label: 'Recycled news', value: 0.93 }], at: now - 300e3 },
-      { platform: 'x', author: 'Some Account', handle: '@someaccount', snippet: 'gm frens, huge alpha dropping tonight', reasonId: 'country', reasons: [{ label: 'Based in 🇳🇬 Nigeria', value: 1 }], at: now - 400e3 },
+      { platform: 'x', author: 'Some Account', handle: '@someaccount', snippet: 'gm frens, huge alpha dropping tonight', reasonId: 'country', reasons: [{ label: 'Based in 🇨🇦 Canada', value: 1 }], at: now - 400e3 },
       { platform: 'linkedin', author: 'Chad W.', snippet: 'Yesterday I fired my best salesperson. He hit 200% of quota. He was loved by clients.', reasonId: 'hollow_inspiration', reasons: [{ label: 'Broetry & humblebrags', value: 0.95 }], at: now - 600e3 },
     ],
   };
