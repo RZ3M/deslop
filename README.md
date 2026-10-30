@@ -121,7 +121,7 @@ Raw answers are cached per post and per question for 14 days. Changing strictnes
 
 ## Install
 
-1. Download `deslop-<version>.zip` from [Releases](https://github.com/RZ3M/deslop/releases) and unzip it, or clone this repo.
+1. Download `deslop-<version>.zip` from the [latest release](https://github.com/RZ3M/deslop/releases/latest) and unzip it, or clone this repo. For the newest build of `main`, rebuilt on every merge, get [`deslop-edge.zip`](https://github.com/RZ3M/deslop/releases/download/edge/deslop-edge.zip).
 2. Open `chrome://extensions` and switch on **Developer mode** (top right).
 3. Click **Load unpacked** and select the folder that contains `manifest.json`.
 4. The settings page opens. Paste an [OpenRouter API key](https://openrouter.ai/settings/keys) and click **Save & test**.
@@ -166,11 +166,19 @@ src/
   content/x-main-world.js  learns X's current AboutAccountQuery id from x.com's own requests
   content/linkedin.js    LinkedIn adapter + profile-location lookups
   popup/, options/, ui/  extension UI
-tests/                   browser-based tests (see below)
-scripts/                 serve.ps1, import-env-key.ps1, make-icons.ps1, package.ps1
+tests/                   browser-based tests, and run.mjs to run them headlessly (see below)
+scripts/                 package.ps1, check-manifest.mjs, serve.ps1, import-env-key.ps1, make-icons.ps1
+.github/workflows/       ci.yml (pull requests), release.yml (main)
 ```
 
 ### Tests
+
+```sh
+node tests/run.mjs          # offline tests in headless Chrome, Chromium, Edge or Brave (Node 22+)
+node tests/run.mjs --live   # also the tests that call Jev; needs config.local.json or OPENROUTER_API_KEY
+```
+
+To open the pages in a browser instead:
 
 ```powershell
 pwsh scripts/import-env-key.ps1          # tests that call Jev need config.local.json
@@ -187,6 +195,18 @@ pwsh scripts/serve.ps1                   # http://localhost:8787
 | `/src/popup/popup.html?shim` | Preview extension pages in a normal tab | — |
 
 The extension was also loaded unpacked in a real Chromium browser and run against a mock `x.com` timeline, with the real content scripts, service worker and Jev.
+
+### Builds and releases
+
+Everything is done by GitHub Actions:
+
+| When | What happens |
+| --- | --- |
+| A pull request is opened or updated | [`ci.yml`](.github/workflows/ci.yml) checks `manifest.json`, runs the offline tests and packages the extension. The zip is under the run's **Artifacts**, ready to load unpacked. |
+| A change lands on `main` | [`release.yml`](.github/workflows/release.yml) runs the same checks, then updates the **edge** pre-release with a fresh `deslop-edge.zip`. |
+| `main` has a `manifest.json` version that hasn't been released | The same run also creates release `v<version>` with `deslop-<version>.zip` and generated notes, and marks it Latest. |
+
+To ship a release, bump `version` in `manifest.json` in your pull request and merge it. To run the live Jev tests in CI, add an `OPENROUTER_API_KEY` repository secret and run **CI** by hand from the Actions tab with *live* ticked (it costs a few cents).
 
 ### Tuning
 
