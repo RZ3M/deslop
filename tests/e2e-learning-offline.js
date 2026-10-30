@@ -9,13 +9,17 @@ window.__shim.reset();
 // Markers in a post's text decide the answers: BAIT85 → withholds_payoff 0.85,
 // CLICK70 → clickbait_hook 0.70, POLITICS, SPORTS (topic), ACME (matches a rule
 // about "my old company").
+// Posts marked SLOW wait for release() before Jev answers.
 const requests = [];
+let release;
+let held = new Promise((r) => (release = r));
 const realFetch = window.fetch;
 window.fetch = async (url, init) => {
   if (!String(url).includes('openrouter.ai/api/alpha/decisions')) return realFetch(url, init);
   const body = JSON.parse(init.body);
   const text = `${body.state.post?.text || ''} ${body.state.post?.quoted_post?.text || ''}`;
   requests.push({ text, questions: body.questions });
+  if (/SLOW/.test(text)) await held;
   const answers = {};
   for (const [id, q] of Object.entries(body.questions)) answers[id] = stubAnswer(id, q, text);
   return new Response(JSON.stringify({ model: 'stub', answers, usage: { cost: 0 } }), { headers: { 'Content-Type': 'application/json' } });
@@ -191,6 +195,10 @@ chip('3013', 'Politics (off)').click();
 await sleep(600);
 const { settings } = await chrome.storage.sync.get('settings');
 check(settings.categories?.politics === true, 'picking it turns Politics on');
+check(
+  state('3013') === 'collapsed' && /hide more posts like this: Politics/.test(barText('3013')) && chips('3013').length > 0,
+  `and the bar stays, with its reasons (${state('3013')}: ${barText('3013')})`,
+);
 
 log('\nUndo');
 await hideByHand('3009');
@@ -200,6 +208,25 @@ check(state('3009') === 'shown', `post is back (${state('3009')})`);
 let store = (await chrome.storage.local.get('learning:v1'))['learning:v1'];
 check(!store.feedback.some((e) => e.key === 't3009'), 'and forgotten');
 
+log('\nRaces');
+add(['3015', 'slow_sal', 'A SLOW post nobody explains CLICK70']);
+await waitUntil(() => requests.some((r) => /SLOW/.test(r.text)));
+cell('3015').querySelector('.deslop-hide-btn').click();
+release();
+await waitUntil(() => !/Learning/.test(barText('3015')));
+check(state('3015') === 'collapsed' && /Hidden by you/.test(barText('3015')), `hiding a post while it's being checked sticks (${state('3015')}: ${barText('3015')})`);
+add(['3016', 'fast_fay', 'One more weird trick to try CLICK75'], ['3017', 'fast_fred', 'Yet another weird trick to try CLICK76']);
+await waitUntil(() => state('3016') === 'collapsed' && state('3017') === 'collapsed');
+barButton('3016', 'Show').click();
+barButton('3017', 'Show').click();
+barButton('3016', 'Unhide').click();
+barButton('3017', 'Unhide').click();
+barButton('3017', 'Undo').click();
+await sleep(500);
+store = (await chrome.storage.local.get('learning:v1'))['learning:v1'];
+check(state('3016') === 'kept' && store.feedback.some((e) => e.key === 't3016' && e.action === 'show'), `two quick unhides: the first stays (${state('3016')})`);
+check(state('3017') === 'collapsed' && !store.feedback.some((e) => e.key === 't3017'), `Undo right after Unhide wins (${state('3017')})`);
+
 log('\nUnhide from the popup');
 let recent = (await send('stats:get')).recent;
 const item = recent.find((r) => r.key === 't3010');
@@ -208,6 +235,11 @@ await send('feedback:show', { platform: 'x', key: 't3010', fired: item.reasons }
 check(await waitUntil(() => state('3010') === 'shown'), `the post appears in the feed (${state('3010')})`);
 recent = (await send('stats:get')).recent;
 check(recent.find((r) => r.key === 't3010')?.fixed === 'shown', 'and is marked unhidden in the list');
+await hideByHand('3010');
+barButton('3010', 'Undo').click();
+await sleep(400);
+store = (await chrome.storage.local.get('learning:v1'))['learning:v1'];
+check(state('3010') === 'shown' && store.feedback.find((e) => e.key === 't3010')?.action === 'show', `hiding it and undoing brings back the unhide (${state('3010')})`);
 
 log('\nAfter a reload');
 globalThis.__deslop.x.reset();

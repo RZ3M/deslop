@@ -11,6 +11,31 @@
   D.state = { settings: null, hasKey: false, overrides: {} }; // overrides: your own hide/unhide per post
   const OVERRIDES_KEY = 'learning:overrides'; // see src/lib/feedback.js
 
+  // D.state.overrides is what storage says, plus decisions you made in this
+  // tab that storage hasn't caught up with yet (null: removed). Those win until
+  // storage agrees, so an unrelated write landing first can't undo them.
+  let storedOverrides = {};
+  const pendingOverrides = new Map();
+  function syncOverrides() {
+    for (const [id, v] of pendingOverrides) {
+      if ((storedOverrides[id]?.a || null) === (v?.a || null)) pendingOverrides.delete(id);
+    }
+    const out = { ...storedOverrides };
+    for (const [id, v] of pendingOverrides) {
+      if (v) out[id] = v;
+      else delete out[id];
+    }
+    return (D.state.overrides = out);
+  }
+  D.storeOverrides = (stored) => {
+    storedOverrides = stored || {};
+    return syncOverrides();
+  };
+  D.expectOverride = (id, value) => {
+    pendingOverrides.set(id, value || null);
+    return syncOverrides();
+  };
+
   D.send = (type, payload = {}) =>
     new Promise((resolve) => {
       try {
@@ -119,7 +144,11 @@
 
   D.loadSettings = async () => {
     const res = await D.send('settings:get');
-    if (res.ok) Object.assign(D.state, res.result);
+    if (res.ok) {
+      const { overrides, ...rest } = res.result;
+      Object.assign(D.state, rest);
+      D.storeOverrides(overrides);
+    }
     return D.state;
   };
 
@@ -137,12 +166,7 @@
     const settings = () => D.state.settings;
     const active = () => settings()?.enabled && settings()?.platforms?.[platform];
     const mine = (key) => D.state.overrides?.[`${platform}:${key}`];
-    const setMine = (key, value) => {
-      const next = { ...D.state.overrides };
-      if (value) next[`${platform}:${key}`] = value;
-      else delete next[`${platform}:${key}`];
-      D.state.overrides = next;
-    };
+    const setMine = (key, value) => D.expectOverride(`${platform}:${key}`, value);
 
     function scheduleScan() {
       if (scanScheduled) return;
@@ -203,7 +227,7 @@
       // Slop check first. Location lookups are rate-limited (X) or may count as
       // a profile view (LinkedIn), so they only run for posts that survive it.
       const textRes = await D.send('classify', { post });
-      if (tracked.get(el) !== post.key) return;
+      if (tracked.get(el) !== post.key || mine(post.key)) return; // you hid or unhid it meanwhile
 
       let decision = { hide: false, reasons: [] };
       let geo = null;
@@ -215,7 +239,7 @@
       } else {
         geo = countryCheck(post);
         quickGeo = await Promise.race([geo, D.sleep(GEO_WAIT_MS).then(() => 'slow')]);
-        if (tracked.get(el) !== post.key) return;
+        if (tracked.get(el) !== post.key || mine(post.key)) return;
         if (quickGeo && quickGeo !== 'slow' && quickGeo.blocked) decision = countryDecision(quickGeo);
       }
 
@@ -355,10 +379,10 @@
       render(el, container, post, decision);
 
       const res = await D.send('feedback:hide', { post });
-      if (!showing(ctx)) return;
+      if (decisions.get(post.key) !== decision) return; // undone meanwhile
       if (!res.ok) decision.message = `Hidden, but Deslop couldn't save it (${res.error})`;
       else if (!res.result.gone) Object.assign(decision, { reason: res.result.reason, options: res.result.options, message: res.result.message });
-      showManual(ctx);
+      if (showing(ctx)) showManual(ctx);
     }
 
     function showManual(ctx) {
@@ -399,29 +423,36 @@
       if (opt.kind !== 'other') decision.reason = opt;
       showManual(ctx);
       const res = await D.send('feedback:reason', { platform, key: post.key, reason: opt });
-      if (!showing(ctx)) return;
+      // Turning a filter on reloads settings and re-renders the feed, so the
+      // decision is updated even while it's off screen.
+      if (decisions.get(post.key) !== decision) return;
       if (!res.ok) decision.message = `Couldn't save that (${res.error})`;
       else if (!res.result.gone) {
         const { reason, message } = res.result;
         if (!decision.options.some((o) => o.kind === reason.kind && o.id === reason.id)) decision.options.unshift(reason);
         Object.assign(decision, { reason, message });
       }
-      showManual(ctx);
+      if (showing(ctx)) showManual(ctx);
     }
 
+    // Back to how the post was: shown, hidden by Deslop, or unhidden by you.
     async function undoHide(ctx) {
       const { el, container, post, decision } = ctx;
-      setMine(post.key, null);
+      const id = `${platform}:${post.key}`;
+      reported.delete(post.key); // so it's recorded if Deslop hides it later
+      setMine(post.key, decision.prev?.kept ? { a: 's' } : null);
       if (decision.prev) {
         decisions.set(post.key, decision.prev);
         render(el, container, post, decision.prev);
-        D.send('feedback:undo', { platform, key: post.key });
+        const res = await D.send('feedback:undo', { platform, key: post.key });
+        if (res.ok) D.expectOverride(id, res.result.now);
         return;
       }
       // Hidden on an earlier visit: judge the post again once Deslop forgets.
       decisions.delete(post.key);
       clear(container);
-      await D.send('feedback:undo', { platform, key: post.key });
+      const res = await D.send('feedback:undo', { platform, key: post.key });
+      if (res.ok) D.expectOverride(id, res.result.now);
       if (tracked.get(el) === post.key) tracked.delete(el);
       scheduleScan();
     }
@@ -435,9 +466,9 @@
       showKept(kctx);
       const fired = decision.reasons.map(({ id, label, value }) => ({ id, label, value }));
       const res = await D.send('feedback:show', { platform, key: post.key, post, fired });
-      if (!showing(kctx)) return;
+      if (decisions.get(post.key) !== kept) return;
       kept.message = res.ok ? res.result.message : `Unhidden, but Deslop couldn't save it (${res.error})`;
-      showKept(kctx);
+      if (showing(kctx)) showKept(kctx);
     }
 
     function showKept(ctx) {
@@ -648,16 +679,25 @@
       return list.some((a) => ids.includes(a.toLowerCase().trim().replace(/^@/, '')));
     }
 
+    // Forget everything, as a page reload would.
     function reset() {
+      rejudge();
+      decisions.clear();
+    }
+
+    // Settings changed: judge every post again. Your own decisions don't depend
+    // on settings, so they're kept, along with a bar you may be using (picking
+    // a reason that turns a filter on changes settings).
+    function rejudge() {
       for (const el of tracked.keys()) clear(adapter.container(el));
       if (!active()) removeButtons();
       tracked.clear();
-      decisions.clear();
+      for (const [key, d] of decisions) if (!d.manual && !d.kept) decisions.delete(key);
       geoMemo.clear();
     }
 
     D.onSettingsChanged = () => {
-      reset();
+      rejudge();
       scheduleScan();
     };
 
@@ -666,8 +706,7 @@
         D.loadSettings().then(() => D.onSettingsChanged());
       } else if (area === 'local' && changes[OVERRIDES_KEY]) {
         const before = D.state.overrides || {};
-        D.state.overrides = changes[OVERRIDES_KEY].newValue || {};
-        applyOverrides(before, D.state.overrides);
+        applyOverrides(before, D.storeOverrides(changes[OVERRIDES_KEY].newValue));
       }
     });
 

@@ -41,6 +41,7 @@ import {
   findFeedback,
   putFeedback,
   removeFeedback,
+  releaseAuthor,
   overridesOf,
 } from './lib/feedback.js';
 import { loadSettings, saveSettings, getApiKey, setApiKey } from './lib/settings.js';
@@ -216,7 +217,12 @@ function isAllowlisted(post, allowlist = []) {
 async function feedbackHide(post) {
   const id = feedbackId(post.platform, post.key);
   await mutateStore((s) => {
-    putFeedback(s, { id, platform: post.platform, key: post.key, action: 'hide', at: Date.now(), post: keepPost(post), reason: PENDING, by: 'auto' });
+    // Hiding a post you had unhidden: Undo brings the unhide back.
+    const earlier = findFeedback(s, id);
+    putFeedback(s, {
+      id, platform: post.platform, key: post.key, action: 'hide', at: Date.now(), post: keepPost(post), reason: PENDING, by: 'auto',
+      ...(earlier?.action === 'show' ? { replaced: earlier } : {}),
+    });
   });
   forgetModel();
   await addRecent({
@@ -232,6 +238,13 @@ async function feedbackHide(post) {
   });
 
   const settings = await getSettings();
+  if (settings.learning?.enabled === false) {
+    await mutateStore((st) => {
+      const e = findFeedback(st, id);
+      if (e?.action === 'hide' && e.by !== 'user') e.reason = JUST_THIS_POST;
+    });
+    return { reason: JUST_THIS_POST, options: [], message: describeReason(JUST_THIS_POST, undefined, settings) };
+  }
   const analysis = await analyze(post, settings, await getModel());
   const [store, model] = await Promise.all([readStore(), getModel()]);
   const signals = explain(analysis.answers, analysis.local, settings, post.platform, model);
@@ -282,16 +295,18 @@ async function analyze(post, settings, model) {
 // You picked why you hid a post (a chip under it, or "Other…" in your words).
 async function feedbackReason(platform, key, choice) {
   const id = feedbackId(platform, key);
-  const settings = await getSettings();
-  const reason = await mutateStore((s) => {
+  let settings;
+  const reason = await mutateStore(async (s) => {
+    settings = await getSettings();
     const e = findFeedback(s, id);
     if (!e || e.action !== 'hide') return null;
     const next = chosenReason(choice, e, settings);
     if (!next) throw new Error('Unknown reason');
-    if (e.reason?.kind === 'author' && s.authors[e.reason.id]?.from === id) delete s.authors[e.reason.id];
+    const before = e.reason;
     e.reason = next;
     e.by = 'user';
-    if (next.kind === 'author') s.authors[next.id] = { label: next.who, from: id, at: Date.now() };
+    if (next.kind === 'author') s.authors[next.id] ||= { label: next.who, from: 'feedback', at: Date.now() };
+    if (before?.kind === 'author') releaseAuthor(s, before.id);
     if (next.kind === 'rule' && !next.custom && s.rules[next.id]) {
       delete s.rules[next.id].deleted; // picking a filter you deleted brings it back
       delete s.rules[next.id].off;
@@ -344,18 +359,19 @@ async function reasonReply(reason, options) {
 // popup there's no post, so the snippet from "Recently hidden" stands in.
 async function feedbackShow({ platform, key, post, fired = [] }) {
   const id = feedbackId(platform, key);
-  const [settings, model] = await Promise.all([getSettings(), getModel()]);
-  const { recent = [] } = await chrome.storage.local.get('recent');
-  const seen = post || fromRecent(recent.find((r) => r.platform === platform && r.key === key));
-  const answers = (await answersCache.get(id))?.answers || {};
-  const { q, s } = snapshot(answers, seen ? localSignals(seen) : {}, settings, platform, model);
   const reasons = fired.map((r) => ({ id: String(r.id || ''), label: String(r.label || ''), value: Number(r.value) || 0 }));
-  await mutateStore((st) =>
-    putFeedback(st, { id, platform, key, action: 'show', at: Date.now(), post: keepPost(seen || {}), fired: reasons, q, s }),
-  );
+  // Queued before any other await, so an Undo right after it lands after it.
+  await mutateStore(async (st) => {
+    const [settings, model] = await Promise.all([getSettings(), getModel()]);
+    const { recent = [] } = await chrome.storage.local.get('recent');
+    const seen = post || fromRecent(recent.find((r) => r.platform === platform && r.key === key));
+    const answers = (await answersCache.get(id))?.answers || {};
+    const { q, s } = snapshot(answers, seen ? localSignals(seen) : {}, settings, platform, model);
+    putFeedback(st, { id, platform, key, action: 'show', at: Date.now(), post: keepPost(seen || {}), fired: reasons, q, s });
+  });
   forgetModel();
   await updateRecent((list) => list.map((r) => (r.platform === platform && r.key === key ? { ...r, fixed: 'shown' } : r)));
-  return { message: describeShow(reasons, settings) };
+  return { message: describeShow(reasons, await getSettings()) };
 }
 
 function fromRecent(r) {
@@ -363,11 +379,13 @@ function fromRecent(r) {
 }
 
 // Forget your decision about a post, and anything it taught.
+// Returns what's left for the post: your earlier unhide, or nothing.
 async function feedbackUndo(platform, key) {
   const id = feedbackId(platform, key);
   const removed = await mutateStore((s) => {
     const e = removeFeedback(s, id);
-    if (e?.reason?.kind === 'author' && s.authors[e.reason.id]?.from === id) delete s.authors[e.reason.id];
+    if (e?.replaced) putFeedback(s, e.replaced);
+    if (e?.reason?.kind === 'author') releaseAuthor(s, e.reason.id);
     return e;
   });
   forgetModel();
@@ -376,7 +394,7 @@ async function feedbackUndo(platform, key) {
       ? list.filter((r) => !(r.platform === platform && r.key === key && r.manual))
       : list.map((r) => (r.platform === platform && r.key === key ? { ...r, fixed: undefined } : r)),
   );
-  return { ok: true };
+  return { now: removed?.replaced ? { a: 's' } : null };
 }
 
 async function editRule(id, patch = {}) {
@@ -500,13 +518,16 @@ async function recordUsage(usage) {
 }
 
 async function recordHidden(entry) {
+  // A post seen again after a reload is hidden again, but counts once for its filter.
+  const { recent = [] } = await chrome.storage.local.get('recent');
+  const again = Boolean(entry.key) && recent.some((r) => r.platform === entry.platform && r.key === entry.key);
   await updateStats((s) => {
     s.hiddenToday += 1;
     s.hiddenTotal += 1;
     const id = entry.reasonId || 'other';
     s.byReason[id] = (s.byReason[id] || 0) + 1;
     const hit = entry.reasons?.[0]?.id;
-    if (hit) s.hits[hit] = (s.hits[hit] || 0) + 1;
+    if (hit && !again) s.hits[hit] = (s.hits[hit] || 0) + 1;
   });
   await addRecent(entry);
   return { ok: true };

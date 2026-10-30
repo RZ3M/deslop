@@ -8,25 +8,25 @@
 
 export const STORE_KEY = 'learning:v1';
 export const OVERRIDES_KEY = 'learning:overrides';
-const MAX_FEEDBACK = 400;
+export const MAX_FEEDBACK = 400;
+const KEEP_PER_RULE = 3; // hides kept per learned filter when old feedback is dropped
 
-let store = null;
+let loading = null;
 let queue = Promise.resolve();
 
-export async function readStore() {
-  if (!store) {
-    const { [STORE_KEY]: saved } = await chrome.storage.local.get(STORE_KEY);
-    store = { feedback: [], rules: {}, authors: {}, ...saved };
-  }
-  return store;
+// Loaded once per service-worker life; every caller shares the same object.
+export function readStore() {
+  loading ||= chrome.storage.local.get(STORE_KEY).then(({ [STORE_KEY]: saved }) => ({ feedback: [], rules: {}, authors: {}, ...saved }));
+  return loading;
 }
 
-// Runs `fn` on the store, then saves it. Changes are applied one at a time.
+// Runs `fn` on the store, then saves it. Changes are applied one at a time,
+// in the order they were asked for.
 export function mutateStore(fn) {
   const run = queue.catch(() => {}).then(async () => {
     const s = await readStore();
     const result = await fn(s);
-    s.feedback = s.feedback.slice(0, MAX_FEEDBACK);
+    s.feedback = trimFeedback(s.feedback);
     await chrome.storage.local.set({ [STORE_KEY]: s, [OVERRIDES_KEY]: overridesOf(s) });
     return result;
   });
@@ -40,6 +40,20 @@ export async function clearStore() {
     s.rules = {};
     s.authors = {};
   });
+}
+
+// Drops the oldest feedback past MAX_FEEDBACK, but keeps a few hides behind
+// every learned filter, so filters don't vanish as your feedback ages.
+export function trimFeedback(feedback, max = MAX_FEEDBACK) {
+  if (feedback.length <= max) return feedback;
+  const pinned = new Set();
+  const perRule = {};
+  for (const e of feedback) {
+    const id = e.action === 'hide' && e.reason?.kind === 'rule' && !e.reason.custom ? e.reason.id : null;
+    if (id && (perRule[id] = (perRule[id] || 0) + 1) <= KEEP_PER_RULE) pinned.add(e);
+  }
+  let room = max - pinned.size;
+  return feedback.filter((e) => pinned.has(e) || room-- > 0);
 }
 
 export const feedbackId = (platform, key) => `${platform}:${key}`;
@@ -58,6 +72,13 @@ export function removeFeedback(s, id) {
   const entry = findFeedback(s, id);
   s.feedback = s.feedback.filter((e) => e.id !== id);
   return entry;
+}
+
+// An author you hid everything from by picking it as a reason stays hidden
+// while any post you hid still gives that reason.
+export function releaseAuthor(s, key) {
+  if (!key || s.authors[key]?.from !== 'feedback') return;
+  if (!s.feedback.some((e) => e.reason?.kind === 'author' && e.reason.id === key)) delete s.authors[key];
 }
 
 // { 'x:t123': { a: 'h' | 's', r: reason label } }

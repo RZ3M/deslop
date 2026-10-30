@@ -101,9 +101,10 @@ export function learnFrom(store = {}, settings = {}, hits = {}) {
     } else if (e.action === 'show') {
       // You want this post shown, so no filter should have hidden it.
       for (const [id, v] of Object.entries(e.s || {})) point(id, v, false);
-      for (const f of e.fired || []) {
+      for (const [i, f] of (e.fired || []).entries()) {
         if (!isLearnable(f.id)) continue;
-        if (rules.has(f.id)) rules.get(f.id).keeps += 1;
+        // Like its hits (stats.hits), a filter's mistakes count where it was the main reason.
+        if (i === 0 && rules.has(f.id)) rules.get(f.id).keeps += 1;
         count(f.id, 'kept');
         for (const qid of firedQuestions(f.id, e.q)) example(qid, 'keep', e.post);
       }
@@ -396,9 +397,11 @@ export function keepPost(post = {}) {
 }
 
 // ── Sharing with everyone ───────────────────────────────────────────────────
-// Feedback never leaves the browser on its own. Exported, it drops names,
-// handles and post links, keeps only signals that mean the same for everyone,
-// and scrubs links, @mentions, emails and long numbers from post text.
+// Feedback never leaves the browser on its own. Exported, it drops authors and
+// post links, your own rules and the filters you wrote in your own words,
+// keeps only signals that mean the same for everyone, and scrubs links,
+// @mentions, emails and long numbers from post text. Names mentioned in a
+// post's text can't be told apart from other words, so they stay.
 
 export function scrub(text = '') {
   return String(text || '')
@@ -423,7 +426,7 @@ export function exportBundle(store = {}, settings = {}, { hits = {}, version = '
     if (!r || r.kind === 'pending') return null;
     if (r.kind === 'category') return { kind: 'category', id: r.id, by };
     if (r.kind === 'rule' && r.custom) return { kind: 'rule', custom: true, by };
-    if (r.kind === 'rule') return { kind: 'rule', ...(r.topic ? { topic: r.topic } : { text: scrub(r.text) }), by };
+    if (r.kind === 'rule') return { kind: 'rule', ...(r.topic ? { topic: r.topic } : { own_words: true }), by };
     return { kind: r.kind, by };
   };
   return {
@@ -435,7 +438,7 @@ export function exportBundle(store = {}, settings = {}, { hits = {}, version = '
     categories: CATEGORIES.filter((c) => isCategoryEnabled(settings, c)).map((c) => c.id),
     hits: pick(hits, shared),
     rules: model.rules.map((r) => ({
-      ...(r.topic ? { topic: r.topic } : { text: scrub(r.text) }),
+      ...(r.topic ? { topic: r.topic } : { own_words: true }),
       status: r.status,
       hides: r.hides,
       keeps: r.keeps,

@@ -19,7 +19,8 @@ import {
   analysisQuestions,
 } from '../src/lib/classify.js';
 import { QUESTIONS, CATEGORIES, focusQuestion, withExamples, LEARNING } from '../src/lib/questions.js';
-import { fitThreshold, learnFrom, attribute, explain, topicReason, describeReason, scrub, exportBundle, summarize } from '../src/lib/learn.js';
+import { fitThreshold, learnFrom, attribute, explain, topicReason, ruleFromText, describeReason, scrub, exportBundle, summarize } from '../src/lib/learn.js';
+import { trimFeedback } from '../src/lib/feedback.js';
 import { createLimiter } from '../src/lib/jev.js';
 
 const results = [];
@@ -468,6 +469,15 @@ await test('a learned filter pauses when you keep unhiding what it hides', () =>
   eq(learnFrom(store, learnBase, { [id]: 3 }).rules[0].status, 'active', 'too few hits to judge');
   eq(learnFrom(store, learnBase, { [id]: 4 }).rules[0].status, 'paused', 'you unhid half of what it hid');
   eq(learnFrom(store, learnBase, { [id]: 10 }).rules[0].status, 'active', 'mostly right');
+  const second = [{ id: 'clickbait', label: 'Clickbait hooks', value: 0.95 }, ...fired];
+  eq(learnFrom({ feedback: [kept(second), kept(second), hid(sportsRule()), hid(sportsRule())] }, learnBase, { [id]: 4 }).rules[0].status, 'active', "unhides where it wasn't the main reason don't count");
+});
+
+await test('learned filters survive old feedback being dropped', () => {
+  const feedback = [...Array.from({ length: 10 }, () => kept([])), hid(sportsRule()), hid(sportsRule())];
+  const trimmed = trimFeedback(feedback, 5);
+  eq(trimmed.length, 5);
+  eq(learnFrom({ feedback: trimmed }, learnBase).rules[0]?.status, 'active');
 });
 
 await test('learning off ignores your feedback', () => {
@@ -536,6 +546,9 @@ await test('shared feedback is anonymized', () => {
   eq(bundle.feedback[0].reason, { kind: 'rule', topic: 'sports', by: 'auto' });
   eq(bundle.feedback[1].values, { clickbait_hook: 0.2 }, 'only shared questions');
   eq(bundle.feedback[2].fired, ['engagement_bait', 'custom']);
+  const typed = { feedback: [hid(ruleFromText('Posts from my coworker Dave Kowalski'), { by: 'user' })] };
+  const typedJson = JSON.stringify(exportBundle(typed, learnBase, { model: learnFrom(typed, learnBase) }));
+  if (/Dave|Kowalski|coworker/.test(typedJson)) throw new Error('filters in your own words leaked');
   eq(summarize(store, learnFrom(store, settings), settings).hidden, 3);
 });
 

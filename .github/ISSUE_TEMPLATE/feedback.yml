@@ -8,7 +8,7 @@ body:
       value: |
         Thanks for helping improve Deslop. In **Settings → Learning from you**, click **Export anonymized feedback**, read the file, then attach it below (drag it into the box) or paste its contents.
 
-        The file has the text of posts you hid or unhid, with links, @handles, emails and phone numbers removed, and what Jev thought of each one. It has no names, accounts or post links. **This issue is public**, so remove anything you'd rather not share.
+        The file has the text of posts you hid or unhid, with links, @handles, emails and phone numbers removed, and what Jev thought of each one. It leaves out who wrote each post, post links and your own rules, but names mentioned inside a post stay. **This issue is public**, so remove anything you'd rather not share.
 
         Maintainers turn shared feedback into tuned thresholds, better examples and test cases with `scripts/learn-from-feedback.mjs`.
   - type: textarea

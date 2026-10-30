@@ -121,20 +121,19 @@ function examples() {
 
 // ── Learned filters and categories people turn on ──────────────────────────
 
+// Filters people wrote in their own words aren't exported, only counted.
 function learnedFilters() {
   const topics = new Map();
-  const texts = new Map();
+  let ownWords = 0;
   for (const b of bundles) {
-    const seenTopics = new Set();
-    const seenTexts = new Set();
+    const seen = new Set();
     for (const r of b.rules || []) {
-      if (r.topic) seenTopics.add(r.topic);
-      else if (r.text) seenTexts.add(r.text.trim().toLowerCase());
+      if (r.topic) seen.add(r.topic);
+      else if (r.own_words) ownWords++;
     }
-    for (const t of seenTopics) topics.set(t, (topics.get(t) || 0) + 1);
-    for (const t of seenTexts) texts.set(t, (texts.get(t) || 0) + 1);
+    for (const t of seen) topics.set(t, (topics.get(t) || 0) + 1);
   }
-  return { topics: [...topics].sort((a, b) => b[1] - a[1]), texts: [...texts].sort((a, b) => b[1] - a[1]) };
+  return { topics: [...topics].sort((a, b) => b[1] - a[1]), ownWords };
 }
 
 function offCategories() {
@@ -213,12 +212,12 @@ for (const [id, e] of examples()) {
   }
 }
 
-const { topics, texts } = learnedFilters();
+const { topics, ownWords } = learnedFilters();
 lines.push('## Learned filters', '');
 lines.push('Topics and rules people taught Deslop. Popular ones could become built-in categories in `CATEGORIES`.', '');
 for (const [topic, n] of topics) lines.push(`- ${TOPICS.find((t) => t.id === topic)?.label || topic}: ${n} ${n === 1 ? 'person' : 'people'}`);
-for (const [text, n] of texts.slice(0, 30)) lines.push(`- ${quote(text, 100)}: ${n} ${n === 1 ? 'person' : 'people'}`);
-if (!topics.length && !texts.length) lines.push('None yet.');
+if (ownWords) lines.push(`- ${ownWords} filter${ownWords === 1 ? '' : 's'} in people's own words (not shared)`);
+if (!topics.length && !ownWords) lines.push('None yet.');
 lines.push('');
 
 const off = offCategories();

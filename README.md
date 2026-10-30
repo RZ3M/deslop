@@ -103,7 +103,7 @@ What your corrections teach:
 
 ### Making Deslop better for everyone
 
-Your corrections stay in your browser. To share them with the project, click **Export anonymized feedback** in Settings and post the file with the [*Share your feedback*](https://github.com/RZ3M/deslop/issues/new?template=feedback.yml) issue template. The export keeps the text of posts you hid or unhid (with links, @handles, emails and phone numbers removed), your reasons and what Jev thought of each post. It has no names, accounts or post links, and leaves out your own rules.
+Your corrections stay in your browser. To share them with the project, click **Export anonymized feedback** in Settings and post the file with the [*Share your feedback*](https://github.com/RZ3M/deslop/issues/new?template=feedback.yml) issue template. The export keeps the text of posts you hid or unhid (with links, @handles, emails and phone numbers removed), your reasons and what Jev thought of each post. It leaves out who wrote each post, post links, your own rules and any filter you wrote in your own words. Names mentioned inside a post's text can't be told apart from other words, so they stay: read the file before you share it.
 
 Maintainers turn everyone's feedback into changes for the base app:
 
@@ -111,7 +111,7 @@ Maintainers turn everyone's feedback into changes for the base app:
 node scripts/learn-from-feedback.mjs feedback/*.json --out report.md --fixtures
 ```
 
-The report suggests base thresholds per category and strictness (fitted the same way as yours, but each person counts for at most five posts and at least three people must agree), lists posts to add as examples, popular learned filters that could become categories, and categories people keep turning on. `--fixtures` adds the labelled posts to `tests/contributed.js`, which the harness runs with `?contributed`. Nothing reaches the base app without review: one person's taste isn't everyone's.
+The report suggests base thresholds per category and strictness (fitted the same way as yours, but each person counts for at most five posts and at least three people must agree), lists posts to add as examples, popular learned topic filters that could become categories, and categories people keep turning on. `--fixtures` adds the labelled posts to `tests/contributed.js`, which the harness runs with `?contributed`. Nothing reaches the base app without review: one person's taste isn't everyone's.
 
 ## How it works
 
@@ -233,10 +233,10 @@ pwsh scripts/serve.ps1                   # http://localhost:8787
 
 | Page | What it checks | Status |
 | --- | --- | --- |
-| `/tests/unit.html` | Place matching, blocking rules, verdict composition, custom rules, focus mode, per-question caching, fancy fonts, word counts and muted words in many scripts, limiter, and learning: threshold fitting, examples, learned filters, reasons, suggestions, anonymized export (offline) | 44/44 |
+| `/tests/unit.html` | Place matching, blocking rules, verdict composition, custom rules, focus mode, per-question caching, fancy fonts, word counts and muted words in many scripts, limiter, and learning: threshold fitting, examples, learned filters, reasons, suggestions, anonymized export (offline) | 45/45 |
 | `/tests/e2e-x-offline.html` | Real `background.js` + content scripts on a mock X timeline without Jev: muted word forms, ad labels in other languages, fancy fonts, "Not interested" feedback | 16/16 |
 | `/tests/e2e-linkedin-offline.html` | Same on a mock LinkedIn feed: hidden posts don't flicker as the page changes, "Show" reveals a post and "Hide again" collapses it, in both hide modes | 19/19 |
-| `/tests/e2e-learning-offline.html` | Real `background.js` + content scripts on a mock X timeline with Jev's API stubbed: the hide button, Unhide, picking reasons and "Other…", learned thresholds, examples, topic filters and authors, the popup's Unhide, reloads, export and reset | 40/40 |
+| `/tests/e2e-learning-offline.html` | Real `background.js` + content scripts on a mock X timeline with Jev's API stubbed: the hide button, Unhide, picking reasons and "Other…", learned thresholds, examples, topic filters and authors, the popup's Unhide, reloads, races (hiding a post mid-check, Undo right after Unhide), export and reset | 45/45 |
 | `/tests/harness.html` | 54 labelled posts (incl. hate, quoted hate, LinkedInfluencers, 8 languages) through the live model, at each strictness. `?contributed` adds the posts in `tests/contributed.js` | 33/33 at Balanced on the original 33; new cases not yet run |
 | `/tests/e2e-x.html` | Real `background.js` + content scripts on a mock X timeline, live Jev | 9/9 before the new cases; not yet re-run |
 | `/tests/e2e-linkedin.html` | Same for LinkedIn, including profile-location parsing and author detection | 9/9 |
