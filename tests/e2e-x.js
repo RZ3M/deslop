@@ -33,6 +33,15 @@ const TWEETS = [
     quoted: { name: 'burnt out dev', handle: 'burnt_out_dev', text: 'Two weeks into a new role at a big company and nobody knows anything. Specs, tickets, tests: all stale.' },
   },
   {
+    id: '1009', name: 'quote guy', handle: 'quote_reactor', expect: 'hidden', why: 'hate in the quoted post',
+    text: '"As a rapist"',
+    quoted: { name: 'edgy account', handle: 'edgy_account', text: "As a rapist, I get turned off when a girl likes rape because it's not rape if you want it retard." },
+  },
+  {
+    id: '1010', name: 'Lucía', handle: 'lucia_coach', expect: 'hidden', why: 'Spanish engagement bait',
+    text: "Hice una guía gratis de 40 páginas para conseguir trabajo en tech. ¿La quieres? Comenta 'GUÍA' y te la mando por DM 📩",
+  },
+  {
     id: '1008', name: 'Me', handle: 'me_myself', expect: 'shown', why: 'allowlisted',
     text: 'Comment GUIDE and I will DM you my free template 👇 (testing the allowlist)',
   },

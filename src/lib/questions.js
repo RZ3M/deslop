@@ -5,9 +5,14 @@
 // `state` and returns calibrated probabilities. Deslop asks all of the atomic
 // questions below about each post in a single request, then combines the
 // answers in code (see CATEGORIES). Because raw answers are cached, changing
-// strictness or toggling a category never needs another model call.
+// strictness or turning a category off never needs another model call; turning
+// one on only asks its own question(s).
 
-export const QUESTIONS = {
+// Every question gets this note: posts are judged the same way in any language.
+const ANY_LANGUAGE =
+  'The post can be written in any language, or mix languages. Apply exactly the same standard whatever the language, and never treat the language itself as a signal.';
+
+const BASE_QUESTIONS = {
   withholds_payoff: {
     type: 'noul',
     instructions: {
@@ -25,6 +30,8 @@ export const QUESTIONS = {
           'Link in the first comment',
           'I made a free template. Repost and follow and I will send it to you',
           'Part 2 if this gets 1,000 likes',
+          "Comenta 'GUÍA' y te la mando por DM 👇",
+          'プロンプトはリプ欄に置いておきます👇',
         ],
       },
       false: {
@@ -54,6 +61,7 @@ export const QUESTIONS = {
           'Agree? ♻️ Repost to help your network and follow me for more',
           'Which one are you? Comment below 👇',
           'Only 1% of people can solve this. Can you?',
+          'Dê like se você concorda 👍 e compartilhe com sua rede',
         ],
       },
       false: {
@@ -100,6 +108,7 @@ export const QUESTIONS = {
           "Stacked tells: 'It's not X, it's Y' contrasts, 'delve', 'In today's fast-paced world', 'unlock', 'elevate', 'landscape'",
           'Emoji-headed bullets (🚀 ✅ 💡 👉) and perfectly parallel sentences',
           'Ends with a neat summary line, a question to the audience or a block of hashtags',
+          "The same tells in other languages, e.g. 'En el vertiginoso mundo actual…', 'Dans un monde en constante évolution…', 'In der heutigen schnelllebigen Welt…'",
         ],
       },
     ],
@@ -121,6 +130,7 @@ export const QUESTIONS = {
           'AI news you missed this week: 1. … 2. … 3. …',
           'Google just changed the game. Here is what happened:',
           'Apple announced X last week. Here is why it matters for your business:',
+          '🚨 OpenAI acaba de lanzar un nuevo modelo. Te cuento todo lo que necesitas saber 🧵',
         ],
       },
       false: {
@@ -154,6 +164,8 @@ export const QUESTIONS = {
           "I can't believe this is free",
           'Stop scrolling. This is important.',
           'X is officially dead.',
+          'Esto lo cambia todo.',
+          '99%の人が知らない裏技',
         ],
       },
       false: {
@@ -164,6 +176,7 @@ export const QUESTIONS = {
           'this game is going to destroy my sleep schedule',
           'lmao this is so real',
           'ok this one got me',
+          'jajaja esto es demasiado real',
         ],
       },
     },
@@ -184,11 +197,43 @@ export const QUESTIONS = {
           'A janitor taught me the most important leadership lesson of my career.',
           'Yesterday I fired my best employee.\n\nHere is why.',
           'My 5-year-old taught me more about sales than any MBA.',
+          'Gestern habe ich meinen besten Mitarbeiter entlassen.\n\nHier ist der Grund.',
         ],
       },
       false: {
         what: 'Specific, sincere content or plain personal news',
         examples: ['Started a new role as a data engineer at Acme today, working on the billing pipeline.'],
+      },
+    },
+  },
+
+  personal_branding: {
+    type: 'noul',
+    instructions: {
+      question:
+        "Is `post.text` personal-brand content from someone who treats posting as their job: a crafted story or update about themselves, written to grow an audience, where the author's image is the point rather than useful information?",
+      focus:
+        'Typical of LinkedIn influencers who share everything. Tells: a hook about their own journey, name-dropping, vulnerability arcs ("there were days I cried"), cliffhangers, a list of lessons, a quotable closing line, emphasis in bold or italic fancy fonts (see `post.formatting`), aesthetic lowercase. Real details do not rule it out: judge whether the post mainly performs the author\'s journey for an audience. A plain announcement with facts, a useful how-to or a genuine question does not count.',
+    },
+    criteria: {
+      true: {
+        what: "A performance of the author's journey or persona for an audience",
+        examples: [
+          "i just spent 2 weeks on a reality show competing for $100,000. there's a lot to unpack.",
+          "I turned down a $200K offer at Google. Here's what nobody tells you about betting on yourself.",
+          'Grateful. Humbled. Speechless. Yesterday I spoke at TEDx in front of 2,000 people.',
+          'Day 147 of building in public: 3 lessons from my first 10 customers',
+          'Got coffee with a billionaire founder today. One thing he said changed how I think about failure.',
+          'Hace un año dejé mi trabajo para emprender. Hoy quiero contarte lo que aprendí 👇',
+        ],
+      },
+      false: {
+        what: 'Information, plain news or a genuine question, even when it is about the author',
+        examples: [
+          'Started a new role as a data engineer at Acme today, working on the billing pipeline.',
+          'Wrote up how we cut our AWS bill by 40%: the three changes that mattered, with numbers.',
+          'Does anyone have a good resource for learning Kafka internals?',
+        ],
       },
     },
   },
@@ -206,6 +251,7 @@ export const QUESTIONS = {
         examples: [
           'If you still work 9-5 in 2026 you are a loser.',
           'Unpopular opinion: people who do X should be fired.',
+          'Si todavía trabajas de 9 a 5 en 2026, eres un perdedor.',
         ],
       },
       false: {
@@ -213,69 +259,364 @@ export const QUESTIONS = {
       },
     },
   },
+
+  // The questions below judge the whole `post`, including a quoted post: a
+  // two-word reaction quoting something vile still puts it on your screen.
+
+  hate_speech: {
+    type: 'noul',
+    instructions: {
+      question:
+        "Does `post`, in its own text or in a post it quotes, attack, demean or dehumanize people for who they are (race, ethnicity, nationality, religion, caste, sex, gender identity, sexual orientation or disability), or use slurs as insults?",
+      focus:
+        'Hateful content in `post.quoted_post` counts even when the author only reacts to it. Slurs count even when framed as a joke. News reports, history or sincere discussion of hate that do not themselves demean anyone do not count.',
+    },
+    criteria: {
+      true: {
+        what: 'Bigotry, dehumanizing language or slurs, in the post or the post it quotes',
+        examples: [
+          'Immigrants are vermin and should be thrown out',
+          'Women are too stupid to have opinions',
+          "it's not rape if you want it retard",
+          'A racial or homophobic slur aimed at someone',
+          'Los [grupo] son animales y no deberían existir',
+        ],
+      },
+      false: {
+        what: 'No attack on a group, or reporting on or condemning hate without repeating it approvingly',
+        not_for: 'A group reclaiming its own term among friends; criticism of an idea, government or company',
+        examples: [
+          'Hate crimes against Asian Americans rose 20% last year, according to the FBI.',
+          'I disagree with the new immigration policy; it will hurt farms that rely on seasonal workers.',
+        ],
+      },
+    },
+  },
+
+  hostility: {
+    type: 'noul',
+    instructions: {
+      question:
+        'Is `post`, in its own text or in a post it quotes, aggressively hostile: insulting, harassing or threatening someone, wishing harm on people, or joking approvingly about violence or sexual assault?',
+      focus:
+        'Judge real aggression aimed at people. Obvious friendly banter or hyperbole ("I will kill my brother if he spoils this lol"), heated but civil disagreement, and news about violence do not count.',
+    },
+    criteria: {
+      true: {
+        what: 'Abusive, threatening or violence-glorifying content',
+        examples: [
+          'Shut up you worthless idiot, nobody asked',
+          'People like you should be shot',
+          'I hope your whole family gets cancer',
+          'As a rapist, I get turned off when she likes it',
+          'Ojalá te mueras, basura',
+        ],
+      },
+      false: {
+        what: 'Civil, playful or merely critical',
+        examples: [
+          'this patch notes thread is going to make me lose my mind',
+          'Respectfully, this take is wrong and here is why: …',
+          'Police say two people were injured in the shooting on Main St.',
+        ],
+      },
+    },
+  },
+
+  profanity: {
+    type: 'noul',
+    instructions: {
+      question: 'Is `post`, in its own text or in a post it quotes, dominated by profanity or crude, vulgar language?',
+      focus: 'One or two casual swear words in an otherwise normal post do not count.',
+    },
+    criteria: {
+      true: 'Profanity or crude language runs through the post',
+      false: 'Clean, or only an occasional casual swear word',
+    },
+  },
+
+  sexual_content: {
+    type: 'noul',
+    instructions: {
+      question:
+        'Is `post` sexually explicit or suggestive, or a spam post luring people to porn, OnlyFans or "link in bio" adult content?',
+      focus: 'Sex education, health and relationships discussed plainly do not count.',
+    },
+    criteria: {
+      true: {
+        what: 'Sexual content or adult-content spam',
+        examples: ['🔞 check my bio for the uncensored video 💦', 'DM me for my spicy pics 😘'],
+      },
+      false: 'Not sexual, or plain discussion of sex, health or relationships',
+    },
+  },
+
+  self_promotion: {
+    type: 'noul',
+    instructions: {
+      question:
+        "Is `post.text` mainly an ad or sales pitch for the author's own course, coaching, newsletter, product, community or paid content?",
+      focus: 'Judge whether selling is the point. Sharing work with real substance, or a job opening, is not a pitch.',
+    },
+    criteria: {
+      true: {
+        what: 'A pitch for something the author sells',
+        examples: [
+          'My cohort on AI automation opens tomorrow. Only 20 spots. DM me "IN" to join',
+          'Join 50,000 founders who read my newsletter every Sunday (link in bio)',
+          'Mi curso de marketing digital ya está disponible con 50% de descuento 🔥',
+        ],
+      },
+      false: {
+        what: 'Content that stands on its own, even if it mentions the author’s work',
+        examples: ['We open-sourced our feature-flag service. Here is how the rollout logic works: …'],
+      },
+    },
+  },
+
+  get_rich_quick: {
+    type: 'noul',
+    instructions: {
+      question:
+        'Does `post` promise easy money or financial freedom, such as passive-income schemes, trading signals, crypto or memecoin pumps, dropshipping or "make $10k a month" hustles?',
+      focus: 'Ordinary finance news, investing discussion or salary talk does not count.',
+    },
+    criteria: {
+      true: {
+        what: 'Get-rich-quick or pump promotion',
+        examples: [
+          'I make $30k/month from home with this one AI side hustle. Here is how 👇',
+          '$PEPE2 is about to 100x, get in before it moons 🚀',
+          'Gana 500€ al día desde tu móvil sin experiencia',
+        ],
+      },
+      false: 'Finance or business content without a get-rich-quick promise',
+    },
+  },
+
+  politics: {
+    type: 'noul',
+    instructions: {
+      question:
+        'Is `post` mainly about politics: elections, politicians, parties, government policy, or political and culture-war debates?',
+      focus: 'A business or tech post that only mentions a regulation in passing is not mainly political.',
+    },
+    criteria: {
+      true: 'Politics is the main subject',
+      false: 'Politics is absent or incidental',
+    },
+  },
 };
 
-// A custom rule is the user's own plain-English description of posts to hide.
+export const QUESTIONS = Object.fromEntries(Object.entries(BASE_QUESTIONS).map(([id, q]) => [id, anyLanguage(q)]));
+
+function anyLanguage(q) {
+  return { ...q, instructions: { ...q.instructions, language: ANY_LANGUAGE } };
+}
+
+// A custom rule is the user's own description of posts to hide. Rules are
+// matched on meaning, so "India" also catches "Indian", "Mumbai" or "भारत".
 export function customRuleQuestion(rule) {
   return {
     type: 'noul',
     instructions: {
       rule,
-      question: "Does `post` fit the user's filter `rule`?",
-      focus: 'Answer yes only when the post is clearly about or of the kind the rule describes.',
+      question: "Does `post`, including any post it quotes, fit the user's filter `rule`?",
+      focus:
+        'Follow the rule as worded. If it asks for posts that mention something, any mention counts, even in passing; otherwise the post should be about it or of that kind. Match on meaning, not exact words: related word forms (India, Indian, Indians), demonyms, synonyms, translations, hashtags, nicknames and obvious specifics count, so a rule about a country also covers its people, cities, leaders and languages.',
+      language: ANY_LANGUAGE,
     },
     criteria: {
-      true: 'The post clearly matches the rule',
-      false: 'The post does not match the rule, or only mentions it in passing',
+      true: 'The post matches the rule as worded, directly or through related words, forms, specifics or translations',
+      false: 'The post has nothing to do with what the rule describes',
     },
   };
 }
 
-// Categories are what the user sees and toggles. Each one turns raw answers
-// into a single 0..1 value that is compared against the strictness threshold.
+// Focus mode: the user lists what they want their feed to be about, and posts
+// about anything else are hidden. Combined with "Tell X you're not
+// interested", that also steers X's For You towards those interests.
+export function focusQuestion(interests) {
+  return {
+    type: 'noul',
+    instructions: {
+      interests,
+      question: "Is `post`, including any post it quotes, about one of the user's `interests`?",
+      focus:
+        'Count news, discussion, opinions, tools, research, products, companies, people, jobs, jokes and memes that are clearly about an interest or closely tied to it. A post that only name-drops an interest while being about something else does not count.',
+      language: ANY_LANGUAGE,
+    },
+    criteria: {
+      true: 'The post is about one of the interests, or closely tied to one',
+      false: 'The post is about something else',
+    },
+  };
+}
+
+// Focus hides a post when it is off-topic with at least this probability.
+export const FOCUS_STRENGTH = {
+  light: 0.9,
+  balanced: 0.75,
+  strong: 0.55,
+};
+
+// Categories are what the user sees and toggles. Each one lists the questions
+// it needs (only questions of enabled categories are asked) and turns their
+// answers, or a signal computed in code (`local`, see classify.js), into a
+// single 0..1 value compared against the strictness threshold.
+export const GROUPS = [
+  { id: 'slop', label: 'Slop' },
+  { id: 'toxic', label: 'Hate & toxicity' },
+  { id: 'topics', label: 'Topics & selling' },
+];
+
 export const CATEGORIES = [
   {
     id: 'engagement_bait',
+    group: 'slop',
     label: 'Engagement bait',
     description:
       'Posts that hide the payoff behind replies, comments or DMs, or exist to farm likes and reposts.',
     defaultOn: true,
+    questions: ['withholds_payoff', 'engagement_farming'],
     value: (a) => Math.max(noul(a.withholds_payoff), noul(a.engagement_farming)),
   },
   {
     id: 'ai_generated',
+    group: 'slop',
     label: 'AI-generated writing',
+    short: 'AI-generated',
     description: 'Posts written in the unmistakable ChatGPT house style.',
     defaultOn: true,
+    questions: ['ai_style'],
     value: (a) => scoreFraction(a.ai_style),
   },
   {
     id: 'news_rehash',
+    group: 'slop',
     label: 'Recycled news',
     description: 'Secondhand recaps of news everyone already covered, with nothing new added.',
     defaultOn: true,
+    questions: ['news_rehash'],
     value: (a) => noul(a.news_rehash),
   },
   {
     id: 'clickbait',
+    group: 'slop',
     label: 'Clickbait hooks',
+    short: 'Clickbait',
     description: '"This changes everything", "RIP Google", "99% of people don\'t know…".',
     defaultOn: true,
+    questions: ['clickbait_hook'],
     value: (a) => noul(a.clickbait_hook),
   },
   {
     id: 'hollow_inspiration',
+    group: 'slop',
     label: 'Broetry & humblebrags',
+    short: 'Broetry',
     description: 'Embellished parables and one-line-per-sentence stories that end in a generic lesson.',
     defaultOn: true,
+    questions: ['hollow_inspiration'],
     value: (a) => noul(a.hollow_inspiration),
   },
   {
+    id: 'fancy_fonts',
+    group: 'slop',
+    label: 'Fancy fonts & emojis',
+    short: 'Fancy fonts',
+    description: '𝐁𝐨𝐥𝐝 and 𝘪𝘵𝘢𝘭𝘪𝘤 Unicode "fonts" mixed with emojis. Spotted instantly in code, without asking Jev.',
+    defaultOn: true,
+    questions: [],
+    value: (_a, local) => local.fancy_fonts ?? 0,
+  },
+  {
+    id: 'linkedinfluencer',
+    group: 'slop',
+    label: 'LinkedInfluencers',
+    short: 'LinkedInfluencer',
+    description:
+      'Chronic personal-brand posting: life-journey stories, name-dropping, vulnerability arcs and cliffhangers where the author is the product.',
+    defaultOn: true,
+    questions: ['personal_branding'],
+    value: (a) => noul(a.personal_branding),
+  },
+  {
     id: 'rage_bait',
+    group: 'slop',
     label: 'Rage bait',
     description: 'Deliberately inflammatory hot takes written to farm angry replies.',
     defaultOn: false,
+    questions: ['rage_bait'],
     value: (a) => noul(a.rage_bait),
+  },
+  {
+    id: 'hate_speech',
+    group: 'toxic',
+    label: 'Hate speech & slurs',
+    short: 'Hate speech',
+    description: 'Bigotry, dehumanizing language and slurs, including in posts they quote.',
+    defaultOn: true,
+    questions: ['hate_speech'],
+    value: (a) => noul(a.hate_speech),
+  },
+  {
+    id: 'hostile',
+    group: 'toxic',
+    label: 'Hostile & abusive',
+    short: 'Hostile',
+    description: 'Insults, harassment, threats, and "jokes" celebrating violence or sexual assault.',
+    defaultOn: true,
+    questions: ['hostility'],
+    value: (a) => noul(a.hostility),
+  },
+  {
+    id: 'profanity',
+    group: 'toxic',
+    label: 'Heavy profanity',
+    short: 'Profanity',
+    description: 'Posts full of swearing and crude language. A stray swear word is fine.',
+    defaultOn: false,
+    questions: ['profanity'],
+    value: (a) => noul(a.profanity),
+  },
+  {
+    id: 'sexual',
+    group: 'toxic',
+    label: 'Sexual content & porn bots',
+    short: 'Sexual',
+    description: 'Explicit or suggestive posts and "check my bio 🔞" spam.',
+    defaultOn: false,
+    questions: ['sexual_content'],
+    value: (a) => noul(a.sexual_content),
+  },
+  {
+    id: 'self_promotion',
+    group: 'topics',
+    label: 'Sales pitches',
+    description: 'Posts that exist to sell the author\'s course, coaching, newsletter or product.',
+    defaultOn: false,
+    questions: ['self_promotion'],
+    value: (a) => noul(a.self_promotion),
+  },
+  {
+    id: 'get_rich_quick',
+    group: 'topics',
+    label: 'Get-rich-quick & crypto pumps',
+    short: 'Get-rich-quick',
+    description: '"$30k/month passive income", trading signals, memecoins about to 100x.',
+    defaultOn: false,
+    questions: ['get_rich_quick'],
+    value: (a) => noul(a.get_rich_quick),
+  },
+  {
+    id: 'politics',
+    group: 'topics',
+    label: 'Politics',
+    description: 'Elections, politicians, policy fights and culture-war debates.',
+    defaultOn: false,
+    questions: ['politics'],
+    value: (a) => noul(a.politics),
   },
 ];
 

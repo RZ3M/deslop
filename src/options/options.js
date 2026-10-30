@@ -1,5 +1,5 @@
 import { loadSettings, saveSettings, getApiKey, setApiKey, DEFAULT_SETTINGS } from '../lib/settings.js';
-import { CATEGORIES, THRESHOLDS } from '../lib/questions.js';
+import { CATEGORIES, GROUPS, THRESHOLDS, FOCUS_STRENGTH } from '../lib/questions.js';
 import { COUNTRIES, REGIONS, getCountry, getRegion } from '../lib/countries.js';
 
 const $ = (id) => document.getElementById(id);
@@ -63,20 +63,29 @@ $('model').addEventListener('change', () => {
 
 // ── Categories and behaviour ────────────────────────────────────────────────
 
+function categoryToggle(cat) {
+  const label = document.createElement('label');
+  label.className = 'toggle';
+  label.innerHTML = `<span class="switch"><input type="checkbox"><span></span></span><span><b></b><small></small></span>`;
+  label.querySelector('b').textContent = cat.label;
+  label.querySelector('small').textContent = cat.description;
+  const input = label.querySelector('input');
+  input.checked = settings.categories[cat.id] ?? cat.defaultOn;
+  input.addEventListener('change', () => {
+    settings.categories[cat.id] = input.checked;
+    save();
+  });
+  return label;
+}
+
 $('categories').replaceChildren(
-  ...CATEGORIES.map((cat) => {
-    const label = document.createElement('label');
-    label.className = 'toggle';
-    label.innerHTML = `<span class="switch"><input type="checkbox"><span></span></span><span><b></b><small></small></span>`;
-    label.querySelector('b').textContent = cat.label;
-    label.querySelector('small').textContent = cat.description;
-    const input = label.querySelector('input');
-    input.checked = settings.categories[cat.id] ?? cat.defaultOn;
-    input.addEventListener('change', () => {
-      settings.categories[cat.id] = input.checked;
-      save();
-    });
-    return label;
+  ...GROUPS.flatMap((group) => {
+    const heading = document.createElement('h3');
+    heading.textContent = group.label;
+    const toggles = document.createElement('div');
+    toggles.className = 'toggles';
+    toggles.append(...CATEGORIES.filter((c) => c.group === group.id).map(categoryToggle));
+    return [heading, toggles];
   }),
 );
 
@@ -107,44 +116,50 @@ bindToggle('platform-linkedin', () => settings.platforms.linkedin, (v) => (setti
 bindToggle('hideWhileChecking', () => settings.hideWhileChecking, (v) => (settings.hideWhileChecking = v));
 bindToggle('collapse', () => settings.hideMode === 'collapse', (v) => (settings.hideMode = v ? 'collapse' : 'remove'));
 bindToggle('hidePromoted', () => settings.hidePromoted, (v) => (settings.hidePromoted = v));
+bindToggle('notInterestedOnX', () => settings.notInterestedOnX, (v) => (settings.notInterestedOnX = v));
 
 // ── Custom rules, muted words, allowlist ────────────────────────────────────
 
-function renderRules() {
-  $('rules').replaceChildren(
-    ...settings.customRules.map((rule, i) => {
-      const li = document.createElement('li');
-      const span = document.createElement('span');
-      span.textContent = rule;
-      const del = document.createElement('button');
-      del.className = 'icon-btn';
-      del.type = 'button';
-      del.title = 'Remove rule';
-      del.textContent = '✕';
-      del.addEventListener('click', () => {
-        settings.customRules.splice(i, 1);
-        renderRules();
-        save();
-      });
-      li.append(span, del);
-      return li;
-    }),
-  );
-}
-$('addRule').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const rule = $('newRule').value.trim();
-  if (!rule || settings.customRules.includes(rule)) return;
-  if (settings.customRules.length >= 10) {
-    alert('Up to 10 custom rules.');
-    return;
+// An editable list of short phrases (custom rules, focus interests).
+function bindPhraseList({ list, form, input, get, max, noun }) {
+  function render() {
+    $(list).replaceChildren(
+      ...get().map((phrase, i) => {
+        const li = document.createElement('li');
+        const span = document.createElement('span');
+        span.textContent = phrase;
+        const del = document.createElement('button');
+        del.className = 'icon-btn';
+        del.type = 'button';
+        del.title = `Remove ${noun}`;
+        del.textContent = '✕';
+        del.addEventListener('click', () => {
+          get().splice(i, 1);
+          render();
+          save();
+        });
+        li.append(span, del);
+        return li;
+      }),
+    );
   }
-  settings.customRules.push(rule);
-  $('newRule').value = '';
-  renderRules();
-  save();
-});
-renderRules();
+  $(form).addEventListener('submit', (e) => {
+    e.preventDefault();
+    const phrase = $(input).value.trim();
+    if (!phrase || get().includes(phrase)) return;
+    if (get().length >= max) {
+      alert(`Up to ${max} ${noun}s.`);
+      return;
+    }
+    get().push(phrase);
+    $(input).value = '';
+    render();
+    save();
+  });
+  render();
+}
+
+bindPhraseList({ list: 'rules', form: 'addRule', input: 'newRule', get: () => settings.customRules, max: 10, noun: 'rule' });
 
 function bindList(id, key) {
   const el = $(id);
@@ -156,6 +171,47 @@ function bindList(id, key) {
 }
 bindList('mutedWords', 'mutedWords');
 bindList('allowlist', 'allowlist');
+
+// ── Focus ───────────────────────────────────────────────────────────────────
+
+const FOCUS_HELP = {
+  light: 'Only hides posts that are clearly unrelated to your interests.',
+  balanced: 'Hides posts that are very likely unrelated. Borderline posts stay.',
+  strong: 'Hides anything that leans off-topic. Your feed narrows fast.',
+};
+
+function renderFocus() {
+  for (const b of $('focusStrength').querySelectorAll('button')) {
+    b.setAttribute('aria-pressed', String(b.dataset.value === settings.focus.strength));
+  }
+  const pct = Math.round((FOCUS_STRENGTH[settings.focus.strength] ?? FOCUS_STRENGTH.balanced) * 100);
+  const empty = settings.focus.enabled && !settings.focus.interests.length ? ' Add at least one interest to start.' : '';
+  $('focusHelp').textContent = `${FOCUS_HELP[settings.focus.strength] || FOCUS_HELP.balanced} (hides at ≥${pct}% off-topic)${empty}`;
+}
+$('focusStrength').addEventListener('click', (e) => {
+  const value = e.target.closest('button')?.dataset.value;
+  if (!value) return;
+  settings.focus.strength = value;
+  renderFocus();
+  save();
+});
+bindToggle('focusEnabled', () => settings.focus.enabled, (v) => {
+  settings.focus.enabled = v;
+  renderFocus();
+});
+bindToggle('focusOnX', () => settings.focus.onX, (v) => (settings.focus.onX = v));
+bindToggle('focusOnLinkedIn', () => settings.focus.onLinkedIn, (v) => (settings.focus.onLinkedIn = v));
+bindPhraseList({
+  list: 'interests',
+  form: 'addInterest',
+  input: 'newInterest',
+  get: () => settings.focus.interests,
+  max: 15,
+  noun: 'interest',
+});
+$('addInterest').addEventListener('submit', () => setTimeout(renderFocus));
+$('interests').addEventListener('click', () => setTimeout(renderFocus));
+renderFocus();
 
 // ── Countries ───────────────────────────────────────────────────────────────
 

@@ -15,6 +15,14 @@ export const DEFAULT_SETTINGS = {
   mutedWords: [],
   allowlist: [],
   hidePromoted: false,
+  notInterestedOnX: false, // also pick ⋯ → "Not interested in this post" for hidden posts on X
+  focus: {
+    enabled: false,
+    interests: [], // e.g. "AI and LLMs", "Startups and venture capital"
+    strength: 'balanced', // light | balanced | strong
+    onX: true,
+    onLinkedIn: true,
+  },
   countries: {
     blocked: [], // ISO codes ("IN") and region ids ("region:europe")
     includeRegions: false,

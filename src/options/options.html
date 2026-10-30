@@ -13,7 +13,7 @@
       <img class="logo big" src="../../icons/icon128.png" alt="">
       <div>
         <h1>Deslop</h1>
-        <p class="muted">Hides engagement bait, AI slop, recycled news and posts from countries you pick on X and LinkedIn.
+        <p class="muted">Hides engagement bait, AI slop, hate, recycled news and posts from countries you pick on X and LinkedIn, in any language.
           Every post is judged by <a href="https://openrouter.ai/~typesafe/jev-latest" target="_blank" rel="noopener">Jev</a>, a model that answers typed questions with calibrated probabilities.</p>
       </div>
       <span id="saved" class="saved" aria-live="polite"></span>
@@ -40,7 +40,8 @@
 
     <section class="card">
       <h2>What to hide</h2>
-      <div id="categories" class="toggles"></div>
+      <p class="muted">Every filter works on posts in any language. Only the filters you turn on are checked, so extra filters only cost when they're on.</p>
+      <div id="categories" class="categories"></div>
 
       <h3>Strictness</h3>
       <div class="segmented wide" id="strictness">
@@ -70,14 +71,52 @@
         </label>
         <label class="toggle">
           <span class="switch"><input type="checkbox" id="hidePromoted"><span></span></span>
-          <span><b>Hide promoted posts</b><small>Ads marked "Ad" or "Promoted"</small></span>
+          <span><b>Hide promoted posts</b><small>Ads marked "Ad" or "Promoted", in any interface language</small></span>
+        </label>
+        <label class="toggle">
+          <span class="switch"><input type="checkbox" id="notInterestedOnX"><span></span></span>
+          <span><b>Tell X you're not interested</b><small>For every post Deslop hides on X, open its ⋯ menu and pick "Not interested in this post", so For You shows you less like it.
+            The menu stays invisible while this happens. The option only exists on For You; elsewhere the menu is closed without clicking anything.</small></span>
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Focus your feed</h2>
+      <p class="muted">List what you want your feed to be about, and Deslop hides posts that aren't about any of it.
+        Turn on <em>Tell X you're not interested</em> too, and every off-topic post also nudges X's For You towards these interests.</p>
+      <div class="toggles">
+        <label class="toggle">
+          <span class="switch"><input type="checkbox" id="focusEnabled"><span></span></span>
+          <span><b>Focus mode</b><small>Hide posts outside your interests. Accounts on your "Never hide" list are always shown.</small></span>
+        </label>
+      </div>
+      <ul id="interests" class="rules"></ul>
+      <form id="addInterest" class="add-row">
+        <input type="text" id="newInterest" placeholder="e.g. AI and LLMs, startups, tech news" maxlength="120">
+        <button class="btn" type="submit">Add interest</button>
+      </form>
+      <div class="segmented wide" id="focusStrength">
+        <button data-value="light">Light</button>
+        <button data-value="balanced">Balanced</button>
+        <button data-value="strong">Strong</button>
+      </div>
+      <p class="muted small" id="focusHelp"></p>
+      <div class="toggles">
+        <label class="toggle">
+          <span class="switch"><input type="checkbox" id="focusOnX"><span></span></span>
+          <span><b>Apply on X</b><small>Timelines, replies and search</small></span>
+        </label>
+        <label class="toggle">
+          <span class="switch"><input type="checkbox" id="focusOnLinkedIn"><span></span></span>
+          <span><b>Apply on LinkedIn</b><small>Your LinkedIn home feed</small></span>
         </label>
       </div>
     </section>
 
     <section class="card">
       <h2>Your own rules</h2>
-      <p class="muted">Describe anything else you never want to see, in plain English. Jev checks every post against each rule.</p>
+      <p class="muted">Describe anything else you never want to see. Rules match on meaning, in any language: <em>India</em> also catches posts about Indians, Mumbai or Modi, and <em>Mentions India</em> catches passing mentions too.</p>
       <ul id="rules" class="rules"></ul>
       <form id="addRule" class="add-row">
         <input type="text" id="newRule" placeholder="e.g. Crypto or memecoin promotion" maxlength="200">
@@ -86,7 +125,8 @@
 
       <div class="two-col">
         <label class="field">Muted words
-          <textarea id="mutedWords" rows="4" placeholder="One per line. Posts containing these are hidden without asking Jev."></textarea>
+          <textarea id="mutedWords" rows="4" placeholder="One per line, any language. Hidden instantly, without asking Jev."></textarea>
+          <small class="muted">Forms count: <code>india</code> also mutes <em>indian</em> and <em>indians</em>. Use <code>crypto*</code> for any word starting with crypto, or <code>"ai"</code> in quotes for the exact word.</small>
         </label>
         <label class="field">Never hide these accounts
           <textarea id="allowlist" rows="4" placeholder="One per line: @handle on X, or the profile slug from linkedin.com/in/slug"></textarea>

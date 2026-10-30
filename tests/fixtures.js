@@ -1,6 +1,8 @@
 // Hand-written sample posts with the verdict we expect at "balanced" strictness.
 // `expect` is 'keep' or the id of a category that should hide the post
-// (any hit category counts as a pass for a 'hide' expectation).
+// (any hit category counts as a pass for a 'hide' expectation). The harness
+// runs each post with the default categories plus the expected one, so
+// off-by-default categories are tested too.
 
 export const FIXTURES = [
   // ── Engagement bait ────────────────────────────────────────────────
@@ -286,6 +288,186 @@ export const FIXTURES = [
       platform: 'x',
       author: { name: 'Ken C.', handle: '@kenc_dev' },
       text: 'psa: a huge uncached prompt can cost you several dollars per request. that adds up fast even on a subscription plan. turn on prompt caching.',
+    },
+  },
+
+  // ── Hate & toxicity (the vile part is often in the quoted post) ──
+  {
+    expect: 'hate_speech',
+    post: {
+      platform: 'x',
+      author: { name: 'quote guy', handle: '@quote_reactor' },
+      text: '"As a rapist"',
+      quoted: { author: '@edgy_account', text: "As a rapist, I get turned off when a girl likes rape because it's not rape if you want it retard." },
+      media: 'video',
+    },
+  },
+  {
+    expect: 'hostile',
+    post: {
+      platform: 'x',
+      author: { name: 'anon', handle: '@anon88213' },
+      text: 'Shut up you braindead loser. Nobody asked. I hope someone finds out where you live.',
+    },
+  },
+  {
+    expect: 'hate_speech',
+    post: {
+      platform: 'x',
+      author: { name: 'Patriota', handle: '@patriota_1488' },
+      text: 'Los inmigrantes son una plaga. Hay que echarlos a todos antes de que nos reemplacen.',
+    },
+  },
+  {
+    expect: 'keep',
+    post: {
+      platform: 'x',
+      author: { name: 'Northwind News', handle: '@northwindnews' },
+      text: 'Police arrested a man for spray-painting antisemitic graffiti on a synagogue in Lyon, prosecutors said on Tuesday.',
+    },
+  },
+  {
+    expect: 'keep',
+    post: {
+      platform: 'x',
+      author: { name: 'maya', handle: '@maya_k' },
+      text: 'if anyone spoils the finale before i watch it tonight i will end you 😭',
+    },
+  },
+
+  // ── Same slop, other languages ────────────────────────────────────
+  {
+    expect: 'engagement_bait',
+    post: {
+      platform: 'linkedin',
+      author: { name: 'Lucía M.', headline: 'Coach de carrera | 150K seguidores' },
+      text: "Hice una guía gratis de 40 páginas para conseguir trabajo en tech.\n\n¿La quieres?\n\n1. Sígueme\n2. Comenta 'GUÍA'\n\nY te la mando por DM 📩",
+    },
+  },
+  {
+    expect: 'engagement_bait',
+    post: {
+      platform: 'x',
+      author: { name: '增长黑客', handle: '@growth_cn' },
+      text: '我找到了一个能10分钟写完一个月内容的提示词。\n\n提示词在评论区👇',
+    },
+  },
+  {
+    expect: 'ai_generated',
+    post: {
+      platform: 'linkedin',
+      author: { name: 'Rafael S.', headline: 'Líder de Transformação Digital' },
+      text: 'No cenário atual, em constante evolução, liderar não é ter todas as respostas — é fazer as perguntas certas.\n\n🚀 Abrace a incerteza\n💡 Cultive a curiosidade\n🤝 Empodere sua equipe\n✅ Celebre o progresso, não a perfeição\n\nOs líderes que prosperam amanhã são os que aprendem hoje.\n\n#Liderança #Inovação',
+    },
+  },
+  {
+    expect: 'clickbait',
+    post: {
+      platform: 'x',
+      author: { name: 'AIテック速報', handle: '@ai_tech_jp' },
+      text: 'Photoshop、終わりました。\n\nこの無料AIツールがデザインを永遠に変えた。99%のデザイナーはまだ知らない。',
+    },
+  },
+  {
+    expect: 'news_rehash',
+    post: {
+      platform: 'x',
+      author: { name: 'IA Quotidienne', handle: '@ia_quotidienne' },
+      text: "🚨 OpenAI vient de lâcher un nouveau modèle. Voici tout ce que vous devez savoir 🧵\n\n1. Il est plus rapide\n2. Il est moins cher\n3. Il change tout\n\nAbonnez-vous pour plus d'actus IA.",
+    },
+  },
+  {
+    expect: 'hollow_inspiration',
+    post: {
+      platform: 'linkedin',
+      author: { name: 'Jonas B.', headline: 'CEO | Gründer | Vater' },
+      text: 'Gestern habe ich meinen besten Vertriebler entlassen.\n\nEr hat 200 % seiner Quote erreicht.\n\nDie Kunden liebten ihn.\n\nAber er war toxisch fürs Team.\n\nKultur schlägt Strategie.\n\nIch würde es wieder tun.\n\nZustimmung?',
+    },
+  },
+  {
+    expect: 'keep',
+    post: {
+      platform: 'x',
+      author: { name: '佐藤', handle: '@sato_dev' },
+      text: '今日はRustでCLIツールを書き直した。起動時間が120msから8msになって嬉しい。',
+    },
+  },
+  {
+    expect: 'keep',
+    post: {
+      platform: 'x',
+      author: { name: 'Omar', handle: '@omar_builds' },
+      text: 'أطلقنا اليوم الإصدار الثاني من تطبيقنا. أصبح البحث أسرع بثلاث مرات بفضل الفهرسة الجديدة.',
+    },
+  },
+  {
+    expect: 'keep',
+    post: {
+      platform: 'linkedin',
+      author: { name: 'Ananya R.', headline: 'Frontend Engineer' },
+      text: 'आज हमने अपने ऐप में डार्क मोड जोड़ा। इसमें तीन दिन लगे क्योंकि हमारे CSS वेरिएबल्स गड़बड़ थे।',
+    },
+  },
+
+  // ── Off-by-default filters ────────────────────────────────────────
+  {
+    expect: 'get_rich_quick',
+    post: {
+      platform: 'x',
+      author: { name: 'Passive Pete', handle: '@passivepete' },
+      text: "I make $30k/month from home with this one AI side hustle. No experience needed. Here's how 👇",
+    },
+  },
+  {
+    expect: 'self_promotion',
+    post: {
+      platform: 'linkedin',
+      author: { name: 'Brad K.', headline: 'I help coaches hit $50K months' },
+      text: "My cohort on AI automation opens tomorrow.\n\nOnly 20 spots left.\n\nDM me 'IN' to grab yours 🚀",
+    },
+  },
+  {
+    expect: 'politics',
+    post: {
+      platform: 'x',
+      author: { name: 'Capitol Watch', handle: '@capitolwatch' },
+      text: 'The Senate passed the budget bill 51-49 tonight after an all-night session. The House votes on Thursday.',
+    },
+  },
+  {
+    expect: 'sexual',
+    post: {
+      platform: 'x',
+      author: { name: 'Jessica 💋', handle: '@jess_x9921' },
+      text: "🔞 new uncensored video in my bio 💦 don't tell anyone 😘",
+    },
+  },
+
+  // ── LinkedInfluencers and fancy fonts ─────────────────────────────
+  // Adapted from a real post, with names and details changed. Fancy fonts but
+  // no emojis, so it's for the LinkedInfluencer question, not the font check.
+  {
+    expect: 'linkedinfluencer',
+    post: {
+      platform: 'linkedin',
+      author: { name: 'Mia L.', headline: 'founder @ tally | cs @ state u' },
+      text: "𝐢 𝐣𝐮𝐬𝐭 𝐬𝐩𝐞𝐧𝐭 2 𝐰𝐞𝐞𝐤𝐬 𝐨𝐧 𝐚 𝐫𝐞𝐚𝐥𝐢𝐭𝐲 𝐬𝐡𝐨𝐰 𝐜𝐨𝐦𝐩𝐞𝐭𝐢𝐧𝐠 𝐟𝐨𝐫 $100,000.\nthere's a lot to unpack.\n\nfirst, you need to understand how our days felt at the accelerator...\n\nit's 8:55 am and i'm running toward a barn for stand-up. the autumn air is stinging my face and, as usual, i've missed breakfast.\n\nover those two weeks, my cofounder and i:\n- did our first sales calls\n- turned our waitlist into paying users\n- launched publicly\n- heard from two famous investors\n\nelimination nights were tense. we'd gather around a bonfire as our rankings were revealed one by one.\n\nthere were days i cried and questioned everything from my company to whether i belonged there at all.\n\n𝒔𝒐𝒎𝒆𝒉𝒐𝒘, 𝒕𝒉𝒆 𝒑𝒆𝒐𝒑𝒍𝒆 𝒄𝒐𝒎𝒑𝒆𝒕𝒊𝒏𝒈 𝒇𝒐𝒓 𝒕𝒉𝒆 𝒔𝒂𝒎𝒆 $100,000 𝒘𝒆𝒓𝒆 𝒂𝒍𝒔𝒐 𝒕𝒉𝒆 𝒑𝒆𝒐𝒑𝒍𝒆 𝒊'𝒅 𝒔𝒕𝒊𝒍𝒍 𝒃𝒆 𝒂𝒘𝒂𝒌𝒆 𝒘𝒊𝒕𝒉 𝒖𝒏𝒕𝒊𝒍 4𝒂𝒎.\n\nall that said, i can't reveal the winner yet.\n\n𝒎𝒂𝒚𝒃𝒆 𝒕𝒉𝒆 𝒎𝒐𝒔𝒕 𝒅𝒂𝒏𝒈𝒆𝒓𝒐𝒖𝒔 𝒕𝒉𝒊𝒏𝒈 𝒚𝒐𝒖 𝒄𝒂𝒏 𝒈𝒊𝒗𝒆 𝒔𝒐𝒎𝒆𝒐𝒏𝒆 𝒊𝒔 𝒑𝒓𝒐𝒐𝒇 𝒕𝒉𝒂𝒕 𝒕𝒉𝒆𝒊𝒓 𝒍𝒊𝒇𝒆 𝒄𝒐𝒖𝒍𝒅 𝒃𝒆 𝒃𝒊𝒈𝒈𝒆𝒓.\n\ni'm coming home with a hungrier appetite for hard problems.",
+    },
+  },
+  {
+    expect: 'linkedinfluencer',
+    post: {
+      platform: 'linkedin',
+      author: { name: 'Tyler R.', headline: 'Founder | Speaker | 3x Top Voice' },
+      text: "Last week I had dinner with a billionaire.\n\nHe didn't talk about money once.\n\nInstead he asked me one question I can't stop thinking about:\n\n\"Who are you when nobody is watching?\"\n\nI've been building in public for 412 days now. Some days it feels like shouting into the void.\n\nBut that question reminded me why I started.\n\nMore on this soon. Stay tuned.",
+    },
+  },
+  {
+    expect: 'fancy_fonts',
+    post: {
+      platform: 'linkedin',
+      author: { name: 'Kara P.', headline: 'Talent Partner' },
+      text: "🚀 𝗕𝗜𝗚 𝗡𝗘𝗪𝗦 🚀\n\nI'm 𝘁𝗵𝗿𝗶𝗹𝗹𝗲𝗱 to share that I've joined Acme as Head of People! ✅\n\n𝑻𝒉𝒆 𝒃𝒆𝒔𝒕 𝒊𝒔 𝒚𝒆𝒕 𝒕𝒐 𝒄𝒐𝒎𝒆 💫",
     },
   },
 ];

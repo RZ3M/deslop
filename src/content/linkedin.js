@@ -69,7 +69,7 @@
   // Best effort: the line after the author's name is usually their headline.
   function headerLines(card, name) {
     const lines = (card.innerText || '').split('\n').map((l) => l.trim()).filter(Boolean);
-    const promoted = lines.slice(0, 8).some((l) => /^Promoted\b/.test(l));
+    const promoted = lines.slice(0, 8).some((l) => /^Promoted\b/.test(l) || D.isAdLabel(l));
     const i = name ? lines.findIndex((l) => l.startsWith(name)) : -1;
     let headline;
     if (i >= 0) {

@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Deslop — slop filter for X & LinkedIn",
   "short_name": "Deslop",
-  "version": "0.1.0",
-  "description": "Hides engagement bait, AI-written slop, recycled news and posts from countries you choose on X and LinkedIn. Powered by Jev.",
+  "version": "0.2.0",
+  "description": "Hides engagement bait, AI slop, hate, recycled news and chosen countries on X and LinkedIn, in any language. Powered by Jev.",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",

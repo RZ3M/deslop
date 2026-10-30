@@ -42,3 +42,9 @@
 .deslop-bar button:hover {
   background: rgba(127, 127, 127, 0.15);
 }
+
+/* While Deslop picks "Not interested" for a hidden post on X. */
+html.deslop-ghost-menu #layers [role='menu'] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
