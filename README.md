@@ -3,7 +3,7 @@
 <h1 align="center">Deslop</h1>
 
 <p align="center"><b>A Chrome extension that removes slop from X and LinkedIn.</b><br>
-Engagement bait, AI-written filler, recycled news, clickbait hooks, broetry and, if you want, posts from countries you choose, quietly disappear from your feed.<br>
+Engagement bait, AI-written filler, hate and abuse, recycled news, clickbait hooks, broetry and, if you want, off-topic posts or posts from countries you choose, quietly disappear from your feed, in any language.<br>
 Every post is judged by <a href="https://openrouter.ai/~typesafe/jev-latest">Jev</a>, TypeSafe's decision model, through OpenRouter.</p>
 
 <p align="center">
@@ -16,24 +16,69 @@ Every post is judged by <a href="https://openrouter.ai/~typesafe/jev-latest">Jev
 
 ## What it hides
 
-| Category | Examples | Default |
-| --- | --- | --- |
-| **Engagement bait** | "The prompt is in the replies 👇", "Comment GUIDE and I'll DM you", "Link in first comment", "Like if you agree" | On |
-| **AI-generated writing** | "In today's fast-paced landscape…", "It's not X, it's Y", emoji-bullet listicles, "Let that sink in" | On |
-| **Recycled news** | "🚨 OpenAI just dropped… here's everything you need to know 🧵", weekly "AI news you missed" roundups | On |
-| **Clickbait hooks** | "RIP Photoshop", "This changes everything", "99% of people don't know this" | On |
-| **Broetry & humblebrags** | "Yesterday I fired my best employee. Here's why." | On |
-| **Rage bait** | Inflammatory hot takes written to farm angry replies | Off |
-| **Your own rules** | Anything you describe in plain English, e.g. *"Crypto or memecoin promotion"* | — |
-| **Countries / regions** | Accounts based in countries or regions you pick | — |
+| Group | Category | Examples | Default |
+| --- | --- | --- | --- |
+| Slop | **Engagement bait** | "The prompt is in the replies 👇", "Comment GUIDE and I'll DM you", "Link in first comment", "Like if you agree" | On |
+| | **AI-generated writing** | "In today's fast-paced landscape…", "It's not X, it's Y", emoji-bullet listicles, "Let that sink in" | On |
+| | **Recycled news** | "🚨 OpenAI just dropped… here's everything you need to know 🧵", weekly "AI news you missed" roundups | On |
+| | **Clickbait hooks** | "RIP Photoshop", "This changes everything", "99% of people don't know this" | On |
+| | **Broetry & humblebrags** | "Yesterday I fired my best employee. Here's why." | On |
+| | **Fancy fonts & emojis** | "🚀 𝗕𝗜𝗚 𝗡𝗘𝗪𝗦 🚀 I'm 𝘁𝗵𝗿𝗶𝗹𝗹𝗲𝗱 to share…": Unicode bold/italic "fonts" mixed with emojis, detected in code | On |
+| | **LinkedInfluencers** | Chronic personal-brand posting: "i just spent 2 weeks on a reality show… there's a lot to unpack", name-dropping, vulnerability arcs, cliffhangers | On |
+| | **Rage bait** | Inflammatory hot takes written to farm angry replies | Off |
+| Hate & toxicity | **Hate speech & slurs** | Bigotry, dehumanizing language, slurs, including in a post being quoted | On |
+| | **Hostile & abusive** | Insults, harassment, threats, "jokes" celebrating violence or sexual assault | On |
+| | **Heavy profanity** | Posts full of swearing (a stray swear word is fine) | Off |
+| | **Sexual content & porn bots** | Explicit posts, "check my bio 🔞" spam | Off |
+| Topics & selling | **Sales pitches** | "My cohort opens tomorrow, DM me IN" | Off |
+| | **Get-rich-quick & crypto pumps** | "$30k/month passive income", "this memecoin is about to 100x" | Off |
+| | **Politics** | Elections, politicians, policy fights, culture-war debates | Off |
+| | **Your own rules** | Anything you describe, e.g. *"Crypto or memecoin promotion"*. Matched on meaning: *India* also catches *Indian*, *Mumbai* or *भारत* | — |
+| | **Focus mode** | Everything that isn't about the interests you list (see below) | Off |
+| | **Countries / regions** | Accounts based in countries or regions you pick | — |
 
 Plus muted words, an allowlist of accounts that are never hidden, and optional hiding of promoted posts.
+
+The hate and toxicity filters judge the whole post, **including any post it quotes**, so a two-word reaction quoting something vile is hidden too.
+
+### Fancy fonts and LinkedInfluencers
+
+𝐁𝐨𝐥𝐝, 𝘪𝘵𝘢𝘭𝘪𝘤 and 𝓈𝒸𝓇𝒾𝓅𝓉 "fonts" are really Unicode maths letters, and they're a heavy tell of LinkedIn-style slop. Deslop spots them in code, without asking Jev:
+
+- **Fancy fonts mixed with emojis** score 0.90–0.99 and are hidden at every strictness, instantly and for free.
+- **Fancy fonts without emojis** can be written by a person, so they aren't hidden on their own. Jev is told the post uses them (and reads the text as plain letters), and the **LinkedInfluencers** question decides whether the post is personal-brand performance: a crafted story about the author's journey, written to grow an audience, where the author is the product.
+
+### Any language
+
+Every filter works the same whatever language a post is written in:
+
+- Each question tells Jev to apply the same standard in any language, and the examples include Spanish, Portuguese, French, German, Chinese and Japanese posts.
+- Custom rules and focus interests are matched on meaning, so a rule written in English catches posts in Hindi or Spanish.
+- Word counting uses `Intl.Segmenter`, so Chinese, Japanese and Thai posts (written without spaces) aren't skipped as "too short".
+- Muted words match in scripts without spaces (Chinese, Japanese, Thai, Korean), treat full-width letters as normal ones (`ＢＴＣ` = `btc`), and keep accents meaningful (`año` ≠ `ano`).
+- "Ad" / "Promoted" labels are recognised in about 40 interface languages.
+
+### Muted words
+
+Muted words hide posts instantly, without asking Jev. They match whole words and their forms: a word of four or more letters also matches words up to three letters longer, so `india` mutes *Indian* and *Indians*. Write `crypto*` to match any word starting with *crypto*, or put a word in double quotes (`"ai"`) to match only that exact word.
+
+### Focus your feed
+
+List what you want your feed to be about (for example *AI and LLMs*, *Startups and tech news*), switch on **Focus mode**, and Deslop hides posts that aren't about any of it. Choose how hard it filters (Light, Balanced or Strong) and whether it applies on X, LinkedIn or both. Accounts on your allowlist are always shown.
+
+### Tell X you're not interested
+
+With this option on, every post Deslop hides on X also gets **⋯ → Not interested in this post**, exactly as if you'd clicked it, so X's For You timeline shows you less like it. Combined with Focus mode, this steers For You towards your interests over time.
+
+- The menu is made invisible while this happens, and only an item whose text matches "Not interested" (in about 40 languages) is ever clicked.
+- X only offers this item on For You. Elsewhere (Following, replies, search) the menu is closed again without clicking anything.
+- Feedback is sent one post at a time, about a second apart.
 
 ## How it works
 
 Jev isn't a chat model. It answers **typed questions** about a piece of text and returns **calibrated probabilities** (`noul` for yes/no, `score` for a graded scale, `choice` for picking an option) in about 100–400 ms.
 
-Deslop asks Jev seven narrow questions about every post in **one request**:
+Deslop asks Jev narrow questions about every post in **one request**, but only the questions for the categories you've turned on:
 
 ```
 withholds_payoff    noul   Does the post hold back its point and push you to the replies/DMs/a thread?
@@ -42,10 +87,20 @@ ai_style            score  How strongly does the writing show ChatGPT-style tell
 news_rehash         noul   Is it secondhand news turned into a recap or hype post, adding nothing new?
 clickbait_hook      noul   Does it open with a hype or curiosity-gap hook that overpromises?
 hollow_inspiration  noul   Is it a formulaic "lessons learned" story or humblebrag?
+personal_branding   noul   Is it personal-brand content from someone who treats posting as their job?
 rage_bait           noul   Is it built to provoke outrage for engagement?
+hate_speech         noul   Does it (or a post it quotes) demean people for who they are, or use slurs?
+hostility           noul   Is it (or a post it quotes) insulting, threatening or celebrating violence?
+profanity           noul   Is it dominated by profanity or crude language?
+sexual_content      noul   Is it sexual, or adult-content spam?
+self_promotion      noul   Is it mainly a pitch for the author's own course, product or newsletter?
+get_rich_quick      noul   Does it promise easy money, passive income or a crypto pump?
+politics            noul   Is it mainly about politics?
+custom_<hash>       noul   One per custom rule: does the post fit the rule?
+focus               noul   With Focus mode on: is the post about one of your interests?
 ```
 
-The answers are combined in code (`src/lib/questions.js`). A post is hidden when any enabled category passes the threshold for your strictness level:
+The fancy-font check runs in code (`src/lib/classify.js`) before any request. The answers are combined in code (`src/lib/questions.js`). A post is hidden when any enabled category passes the threshold for your strictness level:
 
 | Strictness | Hides at | AI-writing score |
 | --- | --- | --- |
@@ -53,9 +108,9 @@ The answers are combined in code (`src/lib/questions.js`). A post is hidden when
 | **Balanced** (default) | ≥ 80 % | ≥ 0.67 ("likely AI") |
 | Strict | ≥ 65 % | ≥ 0.55 |
 
-Raw answers are cached per post for 14 days, so changing strictness or toggling categories never calls the model again. Posts are blurred for the fraction of a second it takes to check them, so slop doesn't flash on screen.
+Raw answers are cached per post and per question for 14 days. Changing strictness or turning a category off never calls the model again; turning one on (or editing a rule or your interests) only asks that one question for posts you see again. Posts are blurred for the fraction of a second it takes to check them, so slop doesn't flash on screen.
 
-**Cost:** about **$0.0001 per post** (≈2,300 input tokens at $0.042/M). Scrolling past 1,000 new posts costs about ten cents. Today's spend is shown in the popup.
+**Cost:** about **$0.0001 per post** with the original seven questions (≈2,300 input tokens at $0.042/M). Each extra filter you turn on adds one short question to the same request, so cost grows a little with every filter, and filters that are off cost nothing. Today's spend is shown in the popup.
 
 ### Country filter
 
@@ -124,9 +179,10 @@ pwsh scripts/serve.ps1                   # http://localhost:8787
 
 | Page | What it checks | Status |
 | --- | --- | --- |
-| `/tests/unit.html` | Place matching, blocking rules, verdict composition, custom rules, limiter (offline) | 18/18 |
-| `/tests/harness.html` | 33 labelled posts through the live model, at each strictness | 33/33 at Balanced |
-| `/tests/e2e-x.html` | Real `background.js` + content scripts on a mock X timeline, live Jev | 9/9 |
+| `/tests/unit.html` | Place matching, blocking rules, verdict composition, custom rules, focus mode, per-question caching, fancy fonts, word counts and muted words in many scripts, limiter (offline) | 33/33 |
+| `/tests/e2e-x-offline.html` | Real `background.js` + content scripts on a mock X timeline without Jev: muted word forms, ad labels in other languages, fancy fonts, "Not interested" feedback | 16/16 |
+| `/tests/harness.html` | 54 labelled posts (incl. hate, quoted hate, LinkedInfluencers, 8 languages) through the live model, at each strictness | 33/33 at Balanced on the original 33; new cases not yet run |
+| `/tests/e2e-x.html` | Real `background.js` + content scripts on a mock X timeline, live Jev | 9/9 before the new cases; not yet re-run |
 | `/tests/e2e-linkedin.html` | Same for LinkedIn, including profile-location parsing and author detection | 9/9 |
 | `/src/popup/popup.html?shim` | Preview extension pages in a normal tab | — |
 
@@ -141,7 +197,8 @@ If Deslop is too aggressive or too lenient on your feed, edit the wording, examp
 - X and LinkedIn change their markup often. The adapters rely on `data-testid`s, roles and profile URLs rather than CSS classes, but a redesign can still break them.
 - X occasionally rotates the id of its `AboutAccountQuery`. Deslop learns the new one when you open any account's *About* page.
 - Windows doesn't render flag emoji, so countries show as two-letter codes there.
-- Text-only: images and videos aren't analysed (Jev is a text model). Posts with fewer than three words are left alone.
+- Text-only: images and videos aren't analysed (Jev is a text model). Posts with fewer than three words (counting a quoted post) are left alone, even in Focus mode.
+- "Not interested" feedback relies on X's menu wording. If X renames the item, Deslop clicks nothing rather than guessing.
 
 ## License
 

@@ -25,6 +25,40 @@
 
   D.sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  D.waitFor = async (find, timeoutMs = 1500, stepMs = 50) => {
+    const until = Date.now() + timeoutMs;
+    for (;;) {
+      const found = find();
+      if (found || Date.now() > until) return found || null;
+      await D.sleep(stepMs);
+    }
+  };
+
+  // The "Ad" / "Promoted" label X and LinkedIn show, in the languages their
+  // interfaces are offered in, so "Hide promoted posts" works whatever
+  // language you use them in.
+  const AD_LABELS = new Set(
+    [
+      'Ad', 'Ads', 'Promoted', 'Sponsored',
+      'Anuncio', 'Promocionado', 'Patrocinado', 'Anúncio', 'Promovido',
+      'Publicité', 'Sponsorisé', 'Annonce', 'Promu',
+      'Werbung', 'Anzeige', 'Gesponsert',
+      'Annuncio', 'Pubblicità', 'Sponsorizzato', 'Promosso',
+      'Advertentie', 'Gesponsord', 'Gepromoot',
+      'Reklama', 'Sponsorowane', 'Promowane', 'Sponzorováno', 'Sponzorované',
+      'Annons', 'Sponsrad', 'Reklame', 'Annonse', 'Sponset', 'Sponsoreret', 'Mainos', 'Sponsoroitu',
+      'Reklam', 'Sponsorlu', 'Tanıtılan',
+      'Реклама', 'Спонсировано', 'Продвигается', 'Спонсорується',
+      'Reclamă', 'Sponsorizat', 'Promovat', 'Hirdetés', 'Szponzorált',
+      'Διαφήμιση', 'Χορηγούμενη', 'מודעה', 'ממומן', 'إعلان', 'ممول', 'مُموَّل', 'مروّج',
+      'विज्ञापन', 'प्रायोजित', 'प्रचारित', 'বিজ্ঞাপন',
+      'Iklan', 'Bersponsor', 'Dipromosikan', 'Ditaja', 'Quảng cáo', 'Được tài trợ',
+      'โฆษณา', 'ได้รับการสนับสนุน', 'Na-promote',
+      '広告', 'プロモーション', '광고', '프로모션', '广告', '廣告', '推广', '推廣', '已推广', '赞助', '贊助',
+    ].map((l) => l.toLowerCase()),
+  );
+  D.isAdLabel = (text) => AD_LABELS.has((text || '').trim().toLowerCase());
+
   D.hash = (str) => {
     let h = 0x811c9dc5;
     for (let i = 0; i < str.length; i++) {
@@ -217,6 +251,7 @@
             reasons: decision.reasons.map((r) => ({ label: r.label, value: r.value })),
           },
         });
+        adapter.onHidden?.(el, post, decision);
       }
 
       if (settings().hideMode === 'collapse') {

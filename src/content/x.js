@@ -150,9 +150,65 @@
     else if (article.querySelector('[data-testid="tweetPhoto"]')) post.media = 'image';
 
     post.promoted = [...article.querySelectorAll('span')].some(
-      (s) => (s.textContent === 'Ad' || s.textContent === 'Promoted') && !s.closest('[data-testid="tweetText"]'),
+      (s) => D.isAdLabel(s.textContent) && !s.closest('[data-testid="tweetText"]'),
     );
     return post;
+  }
+
+  // ── "Not interested in this post" ────────────────────────────────────────
+  // Optionally tells X about every post Deslop hides, the way you would by
+  // hand: ⋯ → "Not interested in this post", so For You shows less like it.
+  // The menu is made invisible while this happens. The item only exists on
+  // For You; elsewhere the menu is closed again without clicking anything.
+  // Only an item whose text matches one of these is ever clicked.
+  const NOT_INTERESTED = [
+    'not interested', 'no me interesa', 'no estoy interesad', 'não tenho interesse', 'não estou interessad',
+    'sem interesse', 'pas intéressé', "ne m'intéresse pas", 'kein interesse', 'nicht interessiert',
+    'non mi interessa', 'non interessato', 'niet geïnteresseerd', 'geen interesse', 'nie interesuje mnie',
+    'nie jestem zainteresowan', 'ilgilenmiyorum', 'ilgimi çekmiyor', 'не интересно', 'неинтересно', 'не цікаво',
+    'нецікаво', 'nu mă interesează', 'nezajímá mě', 'nem érdekel', 'inte intresserad', 'ikke interesseret',
+    'ikke interessert', 'ei kiinnosta', 'δεν ενδιαφέρομαι', 'לא מעניין', 'לא מעוניין', 'غير مهتم', 'لست مهتم',
+    'रुचि नहीं', 'दिलचस्पी नहीं', 'আগ্রহী নই', 'tidak tertarik', 'tidak berminat', 'không quan tâm', 'ไม่สนใจ',
+    'hindi interesado', '興味がない', '関心がない', '관심 없음', '관심없음', '不感兴趣', '不感興趣', '沒有興趣',
+  ];
+  const feedbackQueue = D.createQueue({ spacingMs: 1200, maxLength: 40 });
+  const feedbackSent = new Set();
+
+  const isNotInterested = (text) => {
+    const t = text.normalize('NFKC').toLowerCase().replace(/[’`]/g, "'");
+    return NOT_INTERESTED.some((label) => t.includes(label));
+  };
+
+  function onHidden(article, post) {
+    if (!D.state.settings?.notInterestedOnX || !post.id || feedbackSent.has(post.id)) return;
+    feedbackSent.add(post.id);
+    feedbackQueue(() => markNotInterested(article));
+  }
+
+  async function markNotInterested(article) {
+    const caret = article.isConnected && article.querySelector('[data-testid="caret"]');
+    if (!caret) return false;
+    // Never touch a menu you opened yourself.
+    if (!(await D.waitFor(() => !document.querySelector('[role="menu"]'), 5000))) return false;
+
+    const root = document.documentElement;
+    root.classList.add('deslop-ghost-menu');
+    try {
+      caret.click();
+      const menu = await D.waitFor(() => document.querySelector('[role="menu"]'));
+      if (!menu) return false;
+      const item = [...menu.querySelectorAll('[role="menuitem"]')].find((m) => isNotInterested(D.textOf(m)));
+      if (item) {
+        item.click();
+        return true;
+      }
+      for (const target of [menu, document.body]) {
+        target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+      }
+      return false;
+    } finally {
+      setTimeout(() => root.classList.remove('deslop-ghost-menu'), 400);
+    }
   }
 
   D.x = D.createEngine({
@@ -167,5 +223,6 @@
     },
     placeKey: (post) => post.author?.handle?.replace(/^@/, '').toLowerCase() || null,
     lookupPlace,
+    onHidden,
   });
 })();

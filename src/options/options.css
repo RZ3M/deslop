@@ -159,6 +159,15 @@ details[open] summary {
   }
 }
 
+.categories {
+  display: grid;
+  gap: 8px;
+}
+
+.categories h3:first-child {
+  margin-top: 0;
+}
+
 .toggles {
   display: grid;
   gap: 4px;
