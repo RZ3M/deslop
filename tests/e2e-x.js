@@ -82,6 +82,7 @@ log(`API key imported from config.local.json: ${apiKey ? 'yes' : 'NO'}`);
 
 await chrome.storage.sync.set({
   settings: {
+    hideMode: 'remove',
     countries: { blocked: ['CA'], includeRegions: false, onX: true, onLinkedIn: true },
     customRules: ['Crypto, NFT or memecoin promotion'],
     allowlist: ['@me_myself'],

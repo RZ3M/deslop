@@ -87,7 +87,7 @@ function loadScript(src) {
 await import('../src/background.js');
 await window.__shim.fireInstalled('update');
 await chrome.storage.sync.set({
-  settings: { mutedWords: ['canadian', '加密货币'], hidePromoted: true, notInterestedOnX: true },
+  settings: { hideMode: 'remove', mutedWords: ['canadian', '加密货币'], hidePromoted: true, notInterestedOnX: true },
 });
 
 timeline.innerHTML = TWEETS.map(tweetHtml).join('');

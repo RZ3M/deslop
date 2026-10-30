@@ -1,6 +1,6 @@
 // Offline end-to-end for the LinkedIn adapter: real background.js + content
 // scripts on a mock feed, with no API key. Checks that hidden posts don't
-// flicker when the page changes, and that "Show" keeps a post shown.
+// flicker when the page changes, that "Show" keeps a post revealed and "Hide again" collapses it.
 window.__shim.reset();
 
 const person = (slug) => `https://www.linkedin.com/in/${slug}/`;
@@ -100,7 +100,11 @@ for (const c of CARDS) check(changes[c.id] === 0, `${c.id.padEnd(6)} stays put w
 
 for (const c of HIDDEN) {
   changes = await changesDuring(async () => card(c.id).querySelector('.deslop-bar button')?.click());
-  check(state(c.id) === 'shown' && changes[c.id] === 1, `${c.id.padEnd(6)} stays shown after "Show" (${changes[c.id]} changes, ended ${state(c.id)})`);
+  check(state(c.id) === 'revealed' && changes[c.id] === 1, `${c.id.padEnd(6)} stays revealed after "Show" (${changes[c.id]} changes, ended ${state(c.id)})`);
+  const again = card(c.id).querySelector('.deslop-bar button');
+  check(again?.textContent === 'Hide again', `${c.id.padEnd(6)} revealed post offers "Hide again" (${again?.textContent})`);
+  changes = await changesDuring(async () => again?.click());
+  check(state(c.id) === 'collapsed' && changes[c.id] === 1, `${c.id.padEnd(6)} collapses again after "Hide again" (${changes[c.id]} changes, ended ${state(c.id)})`);
 }
 
 log('\nRemove mode');

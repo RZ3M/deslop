@@ -43,6 +43,30 @@
   background: rgba(127, 127, 127, 0.15);
 }
 
+/* A post the user chose to see: a yellow edge and tint set it apart from the
+   rest of the feed, and its bar offers "Hide again". */
+[data-deslop='revealed'] {
+  box-shadow: inset 4px 0 0 #ffcc4d;
+  background-color: rgba(255, 204, 77, 0.07) !important;
+}
+
+[data-deslop='revealed'] > .deslop-bar {
+  border-style: solid;
+  border-color: rgba(255, 204, 77, 0.6);
+  background: rgba(255, 204, 77, 0.12);
+}
+
+.deslop-tag {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #ffcc4d;
+  color: #3b2a10;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 /* While Deslop picks "Not interested" for a hidden post on X. */
 html.deslop-ghost-menu #layers [role='menu'] {
   opacity: 0 !important;

@@ -8,7 +8,7 @@ export const DEFAULT_SETTINGS = {
   enabled: true,
   platforms: { x: true, linkedin: true },
   strictness: 'balanced', // relaxed | balanced | strict
-  hideMode: 'remove', // remove | collapse
+  hideMode: 'collapse', // collapse (leave a placeholder bar) | remove
   hideWhileChecking: true,
   categories: Object.fromEntries(CATEGORIES.map((c) => [c.id, c.defaultOn])),
   customRules: [],
@@ -24,7 +24,7 @@ export const DEFAULT_SETTINGS = {
     onLinkedIn: true,
   },
   countries: {
-    blocked: [], // ISO codes ("IN") and region ids ("region:europe")
+    blocked: [], // ISO codes ("CA") and region ids ("region:europe")
     includeRegions: false,
     onX: true,
     onLinkedIn: true,
