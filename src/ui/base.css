@@ -1,37 +1,41 @@
 :root {
-  --bg: #f7f7f5;
+  /* Warm yellow and brown ink, from the zipped-mouth icon. --accent is a fill
+     (switches, buttons); text in the accent colour uses --accent-text. */
+  --bg: #fbf8f1;
   --surface: #ffffff;
-  --surface-2: #f0efeb;
-  --text: #1b1b1a;
-  --muted: #6b6a66;
-  --border: #e3e1db;
-  --accent: #1f8f5f;
-  --accent-ink: #ffffff;
-  --accent-soft: #e2f3ea;
+  --surface-2: #f5efe2;
+  --text: #241a0b;
+  --muted: #6f6556;
+  --border: #ebe3d3;
+  --accent: #ffcc4d;
+  --accent-ink: #3b2a10;
+  --accent-soft: #fff3d1;
+  --accent-text: #8a5a00;
   --warn: #b25b00;
   --warn-soft: #fff1e0;
   --danger: #b3261e;
-  --chip: #eceae4;
+  --chip: #f3ead6;
   --radius: 12px;
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.04);
+  --shadow: 0 1px 2px rgb(59 42 16 / 0.05), 0 4px 16px rgb(59 42 16 / 0.05);
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #121312;
-    --surface: #1b1c1b;
-    --surface-2: #232523;
-    --text: #ecebe7;
-    --muted: #9c9b95;
-    --border: #2e302e;
-    --accent: #3fbf86;
-    --accent-ink: #0b1a12;
-    --accent-soft: #173427;
+    --bg: #15120d;
+    --surface: #1f1b14;
+    --surface-2: #29241b;
+    --text: #f3ede1;
+    --muted: #a99f8d;
+    --border: #362f24;
+    --accent: #ffcc4d;
+    --accent-ink: #3b2a10;
+    --accent-soft: #3a3016;
+    --accent-text: #ffcc4d;
     --warn: #f0a44b;
     --warn-soft: #3a2a14;
     --danger: #f2877f;
-    --chip: #2a2c2a;
+    --chip: #2e281e;
     --shadow: none;
     color-scheme: dark;
   }
@@ -49,7 +53,7 @@ body {
 }
 
 a {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 button,
@@ -134,10 +138,12 @@ textarea {
 
 .switch input:checked + span::after {
   transform: translateX(16px);
+  background: var(--accent-ink);
+  box-shadow: none;
 }
 
 .switch input:focus-visible + span {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
 
@@ -163,9 +169,9 @@ textarea {
 }
 
 .segmented button[aria-pressed='true'] {
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: 0 1px 3px rgb(59 42 16 / 0.18);
 }
 
 .chip {
@@ -187,5 +193,4 @@ textarea {
 .logo {
   width: 28px;
   height: 28px;
-  border-radius: 8px;
 }

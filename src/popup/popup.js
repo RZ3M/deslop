@@ -21,6 +21,7 @@ function renderSettings() {
   for (const input of document.querySelectorAll('[data-platform]')) {
     input.checked = Boolean(settings.platforms[input.dataset.platform]);
   }
+  $('placeholders').checked = settings.hideMode === 'collapse';
   const on = Object.entries(settings.platforms).filter(([, v]) => v).map(([k]) => (k === 'x' ? 'X' : 'LinkedIn'));
   $('subtitle').textContent = !settings.enabled
     ? 'Paused'
@@ -43,6 +44,7 @@ $('strictness').addEventListener('click', (e) => {
 for (const input of document.querySelectorAll('[data-platform]')) {
   input.addEventListener('change', () => update((s) => (s.platforms[input.dataset.platform] = input.checked)));
 }
+$('placeholders').addEventListener('change', (e) => update((s) => (s.hideMode = e.target.checked ? 'collapse' : 'remove')));
 $('openOptions').addEventListener('click', () => chrome.runtime.openOptionsPage());
 
 async function renderStats() {
@@ -73,12 +75,13 @@ async function renderStats() {
   const list = $('recent');
   list.replaceChildren(...recent.slice(0, 25).map(renderItem));
   $('empty').hidden = recent.length > 0;
+  $('recentCount').textContent = recent.length ? `· ${Math.min(recent.length, 25)}` : '';
 }
 
 function renderItem(item) {
   const li = document.createElement('li');
   const top = document.createElement('div');
-  top.className = 'top';
+  top.className = 'top-line';
 
   const plat = document.createElement('span');
   plat.className = 'plat';

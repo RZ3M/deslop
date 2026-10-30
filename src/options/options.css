@@ -25,7 +25,6 @@ main {
 .logo.big {
   width: 56px;
   height: 56px;
-  border-radius: 14px;
   flex: none;
 }
 
@@ -35,7 +34,7 @@ main {
   top: 0;
   font-size: 12px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-text);
   opacity: 0;
   transition: opacity 0.2s;
 }
@@ -96,7 +95,7 @@ textarea {
 
 input:focus,
 textarea:focus {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
@@ -123,7 +122,7 @@ textarea {
 }
 
 .status.ok {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .status.err {
@@ -301,7 +300,7 @@ details[open] summary {
 }
 
 input[type='checkbox'].plain {
-  accent-color: var(--accent);
+  accent-color: var(--accent-text);
   width: 16px;
   height: 16px;
 }
