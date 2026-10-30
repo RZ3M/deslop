@@ -100,9 +100,17 @@ async function launchChrome() {
     });
     proc.on('exit', (code) => fail(new Error(`Chrome exited (${code}): ${err.slice(-500)}`)));
   });
-  const close = () => {
+  // Chrome keeps writing to its profile while it shuts down, so wait for it to
+  // exit before deleting the profile. Cleanup never fails the run.
+  const close = async () => {
+    const exited = proc.exitCode !== null ? Promise.resolve() : new Promise((ok) => proc.once('exit', ok));
     proc.kill();
-    rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
+    await Promise.race([exited, new Promise((ok) => setTimeout(ok, 5000))]);
+    try {
+      rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    } catch (err) {
+      console.warn(`Couldn't remove the temporary Chrome profile ${profile}: ${err.code || err.message}`);
+    }
   };
   return { wsUrl, close };
 }
@@ -179,7 +187,7 @@ try {
   }
   client.close();
 } finally {
-  chrome.close();
+  await chrome.close();
   server.close();
   if (wroteConfig) rmSync(configPath, { force: true });
 }
