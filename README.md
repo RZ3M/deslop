@@ -4,7 +4,7 @@
 
 <p align="center"><b>A Chrome extension that removes slop from X and LinkedIn.</b><br>
 Engagement bait, AI-written filler, hate and abuse, recycled news, clickbait hooks, broetry and, if you want, off-topic posts or posts from countries you choose, quietly disappear from your feed, in any language.<br>
-Every post is judged by <a href="https://openrouter.ai/~typesafe/jev-latest">Jev</a>, TypeSafe's decision model, through OpenRouter.</p>
+Every post is judged by <a href="https://openrouter.ai/~typesafe/jev-latest">Jev</a>, TypeSafe's decision model, through OpenRouter, and Deslop <a href="#learning-from-you">learns from every post you hide or unhide yourself</a>.</p>
 
 <p align="center">
   <img src="docs/timeline.png" width="420" alt="An X timeline with two slop posts replaced by Deslop placeholders and one revealed post with a Hide again button">
@@ -78,6 +78,41 @@ With this option on, every post Deslop hides on X also gets **⋯ → Not intere
 - X only offers this item on For You. Elsewhere (Following, replies, search) the menu is closed again without clicking anything.
 - Feedback is sent one post at a time, about a second apart.
 
+## Learning from you
+
+Deslop learns from every correction you make, so the more you use it, the better it fits your feed.
+
+- **Hide a post yourself.** Hover any post and click the hide button (an eye with a slash, next to the post's own ⋯). Deslop asks Jev everything it can about the post (every category, including ones you have off, plus what topic it's about) and works out why you hid it. A bar under the post says what it learned, with the reasons it considered as chips you can tap to correct it, or **Other…** to put it in your own words. **Undo** forgets it.
+- **Unhide a post Deslop hid.** **Show** a hidden post, then **Unhide** it (or click **Unhide** next to it in the popup's *Recently hidden* list). It stays visible, and the filters that hid it learn from the mistake.
+
+What your corrections teach:
+
+| You… | Deslop… |
+| --- | --- |
+| hide a post a filter rated just below its threshold (say clickbait at 70%) | lowers that filter's threshold for you, and shows Jev the post as an example of what to hide |
+| unhide a post a filter hid (say engagement bait at 85%) | raises that filter's threshold just past it, and shows Jev the post as an example of what to keep |
+| hide two posts about a topic no filter covers (sports, crypto, celebrity gossip and 20 more) | learns a new filter for that topic, with your posts as its examples |
+| pick **Other…** and write *"Posts about my old company"* | turns that into a filter straight away |
+| pick **Everything from @someone** | hides everything that account posts |
+| hide a post that fits a filter you have off (say Politics) | offers to turn it on |
+
+- **Thresholds** are fitted to every post you hid and kept, and stay within 15 points of your strictness, so one stray click can't wreck your feed. Posts Jev is very sure about are left to the examples.
+- **Examples:** your three newest hidden and three newest kept posts per question are added to the questions Jev is asked, marked as your own line.
+- **Learned filters** pause themselves if you unhide half of what they hide. In **Settings → Learning from you** you can see and turn off everything Deslop learned, accept its suggestions (turn on a category, hide or never hide an account it noticed you correcting), switch off the hide button or automatic filters, or forget it all.
+- Nothing is learned incrementally: Deslop re-derives everything from your list of corrections, so undoing one undoes what it taught.
+
+### Making Deslop better for everyone
+
+Your corrections stay in your browser. To share them with the project, click **Export anonymized feedback** in Settings and post the file with the [*Share your feedback*](https://github.com/RZ3M/deslop/issues/new?template=feedback.yml) issue template. The export keeps the text of posts you hid or unhid (with links, @handles, emails and phone numbers removed), your reasons and what Jev thought of each post. It has no names, accounts or post links, and leaves out your own rules.
+
+Maintainers turn everyone's feedback into changes for the base app:
+
+```sh
+node scripts/learn-from-feedback.mjs feedback/*.json --out report.md --fixtures
+```
+
+The report suggests base thresholds per category and strictness (fitted the same way as yours, but each person counts for at most five posts and at least three people must agree), lists posts to add as examples, popular learned filters that could become categories, and categories people keep turning on. `--fixtures` adds the labelled posts to `tests/contributed.js`, which the harness runs with `?contributed`. Nothing reaches the base app without review: one person's taste isn't everyone's.
+
 ## How it works
 
 Jev isn't a chat model. It answers **typed questions** about a piece of text and returns **calibrated probabilities** (`noul` for yes/no, `score` for a graded scale, `choice` for picking an option) in about 100–400 ms.
@@ -102,6 +137,8 @@ get_rich_quick      noul   Does it promise easy money, passive income or a crypt
 politics            noul   Is it mainly about politics?
 custom_<hash>       noul   One per custom rule: does the post fit the rule?
 focus               noul   With Focus mode on: is the post about one of your interests?
+learned_<hash>      noul   One per filter learned from your hides: does the post fit it?
+topic               choice Only for a post you hide yourself: which of ~25 topics is it mainly about?
 ```
 
 The fancy-font check runs in code (`src/lib/classify.js`) before any request. The answers are combined in code (`src/lib/questions.js`). A post is hidden when any enabled category passes the threshold for your strictness level:
@@ -114,7 +151,7 @@ The fancy-font check runs in code (`src/lib/classify.js`) before any request. Th
 
 Raw answers are cached per post and per question for 14 days. Changing strictness or turning a category off never calls the model again; turning one on (or editing a rule or your interests) only asks that one question for posts you see again. Posts are blurred for the fraction of a second it takes to check them, so slop doesn't flash on screen.
 
-**Cost:** about **$0.0001 per post** with the original seven questions (≈2,300 input tokens at $0.042/M). Each extra filter you turn on adds one short question to the same request, so cost grows a little with every filter, and filters that are off cost nothing. Today's spend is shown in the popup.
+**Cost:** about **$0.0001 per post** with the original seven questions (≈2,300 input tokens at $0.042/M). Each extra filter you turn on adds one short question to the same request, so cost grows a little with every filter, and filters that are off cost nothing. Examples learned from your corrections add a few hundred tokens to the questions they belong to, and a post you hide yourself is checked once against every question (about $0.0002). Today's spend is shown in the popup.
 
 ### Country filter
 
@@ -149,7 +186,8 @@ This writes `config.local.json` (gitignored). The unpacked extension imports it 
 
 - **Post text goes to OpenRouter/TypeSafe** to be classified: the author's display name and handle or headline, the post text, any quoted post, and whether it has media. Nothing else from the page is sent.
 - Your **API key** stays in `chrome.storage.local` and is only sent to `openrouter.ai`.
-- Verdicts, account locations and stats are stored **locally** in your browser. There's no Deslop server, analytics or telemetry.
+- Verdicts, account locations, stats and the posts you hid or unhid yourself are stored **locally** in your browser. There's no Deslop server, analytics or telemetry.
+- Your feedback only leaves the browser if you export it and share it yourself (see [Making Deslop better for everyone](#making-deslop-better-for-everyone)).
 - Country lookups use your own logged-in X/LinkedIn session from the tab you're browsing, just like opening the About or profile page yourself (see the LinkedIn profile-view note above).
 
 ## Development
@@ -162,17 +200,21 @@ src/
   background.js          service worker: classification, caching, country resolution, stats
   lib/questions.js       ★ every Jev question and threshold, in one place
   lib/classify.js        post → Jev state, answers → verdict (pure, testable)
+  lib/learn.js           your corrections → learned thresholds, examples and filters; export (pure)
+  lib/feedback.js        the log of posts you hid and unhid
   lib/jev.js             OpenRouter Decisions API client (retries, concurrency limit)
   lib/countries.js       countries, regions, place matching
   lib/settings.js, cache.js
-  content/common.js      engine: scan, blur, hide/collapse, country check
+  content/common.js      engine: scan, blur, hide/collapse, country check, hide button and feedback bars
   content/x.js           X adapter + "Account based in" lookups
   content/x-main-world.js  learns X's current AboutAccountQuery id from x.com's own requests
   content/linkedin.js    LinkedIn adapter + profile-location lookups
   popup/, options/, ui/  extension UI
 tests/                   browser-based tests, and run.mjs to run them headlessly (see below)
-scripts/                 package.ps1, check-manifest.mjs, serve.ps1, import-env-key.ps1, make-icons.sh
+scripts/                 package.ps1, check-manifest.mjs, serve.ps1, import-env-key.ps1, make-icons.sh,
+                         learn-from-feedback.mjs (shared feedback → report and test cases)
 .github/workflows/       ci.yml (pull requests), release.yml (main)
+.github/ISSUE_TEMPLATE/  feedback.yml (sharing exported feedback)
 ```
 
 ### Tests
@@ -191,10 +233,11 @@ pwsh scripts/serve.ps1                   # http://localhost:8787
 
 | Page | What it checks | Status |
 | --- | --- | --- |
-| `/tests/unit.html` | Place matching, blocking rules, verdict composition, custom rules, focus mode, per-question caching, fancy fonts, word counts and muted words in many scripts, limiter (offline) | 33/33 |
+| `/tests/unit.html` | Place matching, blocking rules, verdict composition, custom rules, focus mode, per-question caching, fancy fonts, word counts and muted words in many scripts, limiter, and learning: threshold fitting, examples, learned filters, reasons, suggestions, anonymized export (offline) | 44/44 |
 | `/tests/e2e-x-offline.html` | Real `background.js` + content scripts on a mock X timeline without Jev: muted word forms, ad labels in other languages, fancy fonts, "Not interested" feedback | 16/16 |
 | `/tests/e2e-linkedin-offline.html` | Same on a mock LinkedIn feed: hidden posts don't flicker as the page changes, "Show" reveals a post and "Hide again" collapses it, in both hide modes | 19/19 |
-| `/tests/harness.html` | 54 labelled posts (incl. hate, quoted hate, LinkedInfluencers, 8 languages) through the live model, at each strictness | 33/33 at Balanced on the original 33; new cases not yet run |
+| `/tests/e2e-learning-offline.html` | Real `background.js` + content scripts on a mock X timeline with Jev's API stubbed: the hide button, Unhide, picking reasons and "Other…", learned thresholds, examples, topic filters and authors, the popup's Unhide, reloads, export and reset | 40/40 |
+| `/tests/harness.html` | 54 labelled posts (incl. hate, quoted hate, LinkedInfluencers, 8 languages) through the live model, at each strictness. `?contributed` adds the posts in `tests/contributed.js` | 33/33 at Balanced on the original 33; new cases not yet run |
 | `/tests/e2e-x.html` | Real `background.js` + content scripts on a mock X timeline, live Jev | 9/9 before the new cases; not yet re-run |
 | `/tests/e2e-linkedin.html` | Same for LinkedIn, including profile-location parsing and author detection | 9/9 |
 | `/src/popup/popup.html?shim` | Preview extension pages in a normal tab | — |
@@ -215,7 +258,7 @@ To ship a release, bump `version` in `manifest.json` in your pull request and me
 
 ### Tuning
 
-If Deslop is too aggressive or too lenient on your feed, edit the wording, examples or thresholds in [`src/lib/questions.js`](src/lib/questions.js), add a labelled case to [`tests/fixtures.js`](tests/fixtures.js) and re-run the harness. Following TypeSafe's guidance, keep questions atomic: one judgment per question, combined in code.
+For your own feed, just correct Deslop: hide what it misses and unhide what it gets wrong (see [Learning from you](#learning-from-you)). To change the defaults for everyone, edit the wording, examples or thresholds in [`src/lib/questions.js`](src/lib/questions.js), add a labelled case to [`tests/fixtures.js`](tests/fixtures.js) and re-run the harness. Shared feedback, run through `scripts/learn-from-feedback.mjs`, tells you where to start. Following TypeSafe's guidance, keep questions atomic: one judgment per question, combined in code.
 
 ## Known limitations
 
@@ -224,6 +267,8 @@ If Deslop is too aggressive or too lenient on your feed, edit the wording, examp
 - Windows doesn't render flag emoji, so countries show as two-letter codes there.
 - Text-only: images and videos aren't analysed (Jev is a text model). Posts with fewer than three words (counting a quoted post) are left alone, even in Focus mode.
 - "Not interested" feedback relies on X's menu wording. If X renames the item, Deslop clicks nothing rather than guessing.
+- The hide button places itself left of the buttons it finds in a post's top right. If a redesign moves those, it falls back to the post's top-right corner, where it may cover one of them.
+- A learned filter only judges posts after it turns on; topics come from a fixed list of about 25 (see `TOPICS` in `src/lib/questions.js`), and anything else needs **Other…**.
 
 ## License
 

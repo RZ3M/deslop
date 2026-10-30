@@ -29,6 +29,11 @@ export const DEFAULT_SETTINGS = {
     onX: true,
     onLinkedIn: true,
   },
+  learning: {
+    enabled: true, // learn from the posts you hide and unhide yourself (learn.js)
+    hideButton: true, // a hide button on every post
+    autoRules: true, // turn topics you keep hiding into filters without asking
+  },
   model: DEFAULT_MODEL,
 };
 

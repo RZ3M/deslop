@@ -2,6 +2,10 @@ import { askJev, createLimiter } from '../src/lib/jev.js';
 import { buildState, buildQuestions, verdictFrom, localSignals } from '../src/lib/classify.js';
 import { CATEGORIES } from '../src/lib/questions.js';
 import { FIXTURES } from './fixtures.js';
+import { CONTRIBUTED } from './contributed.js';
+
+// ?contributed also runs the posts people shared (scripts/learn-from-feedback.mjs).
+const CASES = new URLSearchParams(location.search).has('contributed') ? [...FIXTURES, ...CONTRIBUTED] : FIXTURES;
 
 const summary = document.getElementById('summary');
 const table = document.getElementById('out');
@@ -18,7 +22,7 @@ const started = performance.now();
 let cost = 0;
 
 const answered = await Promise.all(
-  FIXTURES.map((f) =>
+  CASES.map((f) =>
     limit(async () => {
       const t0 = performance.now();
       const res = await askJev({

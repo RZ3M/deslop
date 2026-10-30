@@ -152,6 +152,7 @@
     findPosts,
     extract,
     container: (card) => card,
+    body: (card) => card.querySelector(TEXT_BOX),
     skip: () => false,
     placeKey: (post) => (post.author?.kind === 'person' ? post.author.slug?.toLowerCase() : null),
     lookupPlace,

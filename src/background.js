@@ -2,6 +2,7 @@ import { askJev, createLimiter, DEFAULT_MODEL } from './lib/jev.js';
 import {
   buildState,
   questionsFor,
+  analysisQuestions,
   missingQuestions,
   mergeAnswers,
   questionHash,
@@ -9,10 +10,40 @@ import {
   hasEnoughText,
   findMutedWord,
   localSignals,
+  customRuleId,
+  isCategoryEnabled,
+  authorKey,
   fnv1a,
 } from './lib/classify.js';
-import { locationQuestion, NO_COUNTRY, COUNTRY_CHOICE_MIN } from './lib/questions.js';
-import { loadSettings, getApiKey, setApiKey } from './lib/settings.js';
+import { locationQuestion, NO_COUNTRY, COUNTRY_CHOICE_MIN, NO_TOPIC, CATEGORIES } from './lib/questions.js';
+import {
+  learnFrom,
+  explain,
+  snapshot,
+  attribute,
+  topicReason,
+  ruleFromText,
+  authorReason,
+  reasonOf,
+  describeReason,
+  describeShow,
+  keepPost,
+  summarize,
+  exportBundle,
+  PENDING,
+  JUST_THIS_POST,
+} from './lib/learn.js';
+import {
+  readStore,
+  mutateStore,
+  clearStore,
+  feedbackId,
+  findFeedback,
+  putFeedback,
+  removeFeedback,
+  overridesOf,
+} from './lib/feedback.js';
+import { loadSettings, saveSettings, getApiKey, setApiKey } from './lib/settings.js';
 import { PersistentCache } from './lib/cache.js';
 import { matchPlace, isBlockedPlace, getCountry, placeLabel } from './lib/countries.js';
 
@@ -27,14 +58,31 @@ const inflight = new Map();
 
 let settingsPromise = null;
 const getSettings = () => (settingsPromise ||= loadSettings());
+
+// What Deslop learned from your feedback (learn.js), rebuilt whenever the
+// feedback or your settings change.
+let modelPromise = null;
+const getModel = () =>
+  (modelPromise ||= Promise.all([getSettings(), readStore(), readStats()]).then(([settings, store, stats]) =>
+    learnFrom(store, settings, stats.hits),
+  ));
+const forgetModel = () => (modelPromise = null);
+
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'sync' && changes.settings) settingsPromise = null;
+  if (area === 'sync' && changes.settings) {
+    settingsPromise = null;
+    forgetModel();
+  }
 });
 
 // ── Messages from content scripts, popup and options ─────────────────────────
 
 const handlers = {
-  'settings:get': async () => ({ settings: await getSettings(), hasKey: Boolean(await getApiKey()) }),
+  'settings:get': async () => ({
+    settings: await getSettings(),
+    hasKey: Boolean(await getApiKey()),
+    overrides: overridesOf(await readStore()),
+  }),
   classify: ({ post }) => classify(post),
   'geo:get': ({ platform, key }) => geoGet(platform, key),
   'geo:put': ({ platform, key, raw }) => geoPut(platform, key, raw),
@@ -43,6 +91,19 @@ const handlers = {
   'key:test': ({ apiKey }) => testKey(apiKey),
   'cache:clear': async () => {
     await Promise.all([answersCache.clear(), geoCache.clear(), geoModelCache.clear()]);
+    return { ok: true };
+  },
+  'feedback:hide': ({ post }) => feedbackHide(post),
+  'feedback:show': (msg) => feedbackShow(msg),
+  'feedback:undo': ({ platform, key }) => feedbackUndo(platform, key),
+  'feedback:reason': ({ platform, key, reason }) => feedbackReason(platform, key, reason),
+  'learning:get': async () => summarize(await readStore(), await getModel(), await getSettings()),
+  'learning:rule': ({ id, patch }) => editRule(id, patch),
+  'learning:author': ({ key, label, block }) => editAuthor(key, label, block),
+  'learning:export': () => exportFeedback(),
+  'learning:reset': async () => {
+    await clearStore();
+    forgetModel();
     return { ok: true };
   },
 };
@@ -62,7 +123,16 @@ async function classify(post) {
   const settings = await getSettings();
   if (!settings.enabled || !settings.platforms[post.platform]) return { hide: false, skipped: 'disabled' };
 
+  // Your own decision about this post beats everything else.
+  const mine = findFeedback(await readStore(), feedbackId(post.platform, post.key));
+  if (mine?.action === 'hide') return { hide: true, manual: true, reasons: [{ id: 'manual', label: 'Hidden by you', value: 1 }] };
+  if (mine?.action === 'show') return { hide: false, skipped: 'kept' };
+
   if (isAllowlisted(post, settings.allowlist)) return { hide: false, skipped: 'allowlisted' };
+
+  const model = await getModel();
+  const author = authorKey(post.platform, post.author);
+  if (author && model.authors[author]) return verdict([{ id: 'author', label: `You hide ${model.authors[author]}`, value: 1 }]);
 
   const muted = findMutedWord(post, settings.mutedWords);
   if (muted) return verdict([{ id: 'muted', label: `Muted word: ${muted}`, value: 1 }]);
@@ -71,52 +141,58 @@ async function classify(post) {
 
   // Signals computed in code (fancy fonts) can hide a post without asking Jev.
   const local = localSignals(post);
-  const quick = verdictFrom({}, settings, post.platform, local);
+  const quick = verdictFrom({}, settings, post.platform, local, model);
   if (quick.hide) return verdict(quick.reasons.map(({ id, label, value }) => ({ id, label, value })));
 
   if (!hasEnoughText(post)) return { hide: false, skipped: 'too-short' };
 
-  const questions = questionsFor(settings, post.platform);
+  const questions = questionsFor(settings, post.platform, model);
   if (!Object.keys(questions).length) return { hide: false, skipped: 'nothing-enabled' };
 
   const apiKey = await getApiKey();
   if (!apiKey) return { hide: false, skipped: 'no-key' };
 
-  const cacheKey = `${post.platform}:${post.key}`;
-  let entry = await answersCache.get(cacheKey);
-  const missing = missingQuestions(entry, questions);
-
-  if (Object.keys(missing).length) {
-    const jobKey = `${cacheKey}:${Object.entries(missing).map(([id, q]) => `${id}=${questionHash(q)}`).sort().join(',')}`;
-    if (!inflight.has(jobKey)) {
-      const job = limit(() =>
-        askJev({
-          apiKey,
-          model: settings.model || DEFAULT_MODEL,
-          state: buildState(post),
-          questions: missing,
-        }),
-      )
-        .then(async (res) => {
-          // Re-read: another job for the same post may have finished meanwhile.
-          const merged = mergeAnswers(await answersCache.get(cacheKey), missing, res.answers);
-          await answersCache.set(cacheKey, merged);
-          await recordUsage(res.usage);
-          return merged;
-        })
-        .finally(() => inflight.delete(jobKey));
-      inflight.set(jobKey, job);
-    }
-    try {
-      entry = await inflight.get(jobKey);
-    } catch (err) {
-      await recordError(err);
-      return { hide: false, skipped: 'error', error: err.message };
-    }
+  let entry;
+  try {
+    entry = await answersFor(post, questions, settings, apiKey);
+  } catch (err) {
+    await recordError(err);
+    return { hide: false, skipped: 'error', error: err.message };
   }
 
-  const v = verdictFrom(entry.answers, settings, post.platform, local);
+  const v = verdictFrom(entry.answers, settings, post.platform, local, model);
   return verdict(v.reasons.map(({ id, label, value }) => ({ id, label, value })));
+}
+
+// Jev's answers to `questions` about a post: the cached ones, plus one
+// request for any that are missing or were reworded.
+async function answersFor(post, questions, settings, apiKey) {
+  const cacheKey = `${post.platform}:${post.key}`;
+  const entry = await answersCache.get(cacheKey);
+  const missing = missingQuestions(entry, questions);
+  if (!Object.keys(missing).length) return entry;
+
+  const jobKey = `${cacheKey}:${Object.entries(missing).map(([id, q]) => `${id}=${questionHash(q)}`).sort().join(',')}`;
+  if (!inflight.has(jobKey)) {
+    const job = limit(() =>
+      askJev({
+        apiKey,
+        model: settings.model || DEFAULT_MODEL,
+        state: buildState(post),
+        questions: missing,
+      }),
+    )
+      .then(async (res) => {
+        // Re-read: another job for the same post may have finished meanwhile.
+        const merged = mergeAnswers(await answersCache.get(cacheKey), missing, res.answers);
+        await answersCache.set(cacheKey, merged);
+        await recordUsage(res.usage);
+        return merged;
+      })
+      .finally(() => inflight.delete(jobKey));
+    inflight.set(jobKey, job);
+  }
+  return inflight.get(jobKey);
 }
 
 function verdict(reasons) {
@@ -129,6 +205,204 @@ function isAllowlisted(post, allowlist = []) {
     .filter(Boolean)
     .map((s) => s.toLowerCase().replace(/^@/, ''));
   return allowlist.some((a) => ids.includes(a.toLowerCase().trim().replace(/^@/, '')));
+}
+
+// ── Learning from you ───────────────────────────────────────────────────────
+// Posts you hide or unhide yourself are stored as feedback (feedback.js) and
+// learn.js turns them into thresholds, examples and new filters.
+
+// You hid a post: it stays hidden, then Deslop asks Jev everything it could
+// ask about it (including categories you have off and its topic) to work out why.
+async function feedbackHide(post) {
+  const id = feedbackId(post.platform, post.key);
+  await mutateStore((s) => {
+    putFeedback(s, { id, platform: post.platform, key: post.key, action: 'hide', at: Date.now(), post: keepPost(post), reason: PENDING, by: 'auto' });
+  });
+  forgetModel();
+  await addRecent({
+    platform: post.platform,
+    key: post.key,
+    author: post.author?.name || post.author?.handle || '',
+    handle: post.author?.handle || post.author?.slug || '',
+    snippet: (post.text || '').slice(0, 160),
+    url: post.url || '',
+    reasonId: 'manual',
+    manual: true,
+    reasons: [{ id: 'manual', label: 'Hidden by you', value: 1 }],
+  });
+
+  const settings = await getSettings();
+  const analysis = await analyze(post, settings, await getModel());
+  const [store, model] = await Promise.all([readStore(), getModel()]);
+  const signals = explain(analysis.answers, analysis.local, settings, post.platform, model);
+  const picked = attribute({ signals, topic: analysis.topic, post }, store, settings);
+  const { q, s } = snapshot(analysis.answers, analysis.local, settings, post.platform, model);
+
+  const reason = await mutateStore((st) => {
+    const e = findFeedback(st, id);
+    if (!e || e.action !== 'hide') return null; // undone meanwhile
+    Object.assign(e, { q, s, topic: analysis.topic });
+    if (e.by !== 'user') e.reason = picked.reason;
+    return e.reason;
+  });
+  forgetModel();
+  if (!reason) return { gone: true };
+
+  const reply = await reasonReply(reason, picked.options);
+  if (analysis.error) reply.message = `Only this post is hidden: Deslop couldn't check why (${analysis.error.slice(0, 80)}).`;
+  else if (!analysis.asked && reason.kind === 'post') reply.message = 'Only this post is hidden. Add an OpenRouter API key so Deslop can learn why.';
+  return reply;
+}
+
+async function analyze(post, settings, model) {
+  const local = localSignals(post);
+  const cached = await answersCache.get(`${post.platform}:${post.key}`);
+  let answers = cached?.answers || {};
+  let error = null;
+  const apiKey = await getApiKey();
+  const asked = Boolean(apiKey) && hasEnoughText(post);
+  if (asked) {
+    try {
+      const questions = analysisQuestions(settings, post.platform, model);
+      const entry = await answersFor(post, questions, settings, apiKey);
+      answers = Object.fromEntries(Object.keys(questions).filter((qid) => entry.answers[qid]).map((qid) => [qid, entry.answers[qid]]));
+    } catch (err) {
+      await recordError(err);
+      error = err.message;
+    }
+  }
+  const t = answers.topic;
+  const topic =
+    t?.type === 'choice' && t.choice && t.choice !== NO_TOPIC
+      ? { id: t.choice, p: Math.round((t.probabilities?.[t.choice] ?? 0) * 100) / 100 }
+      : null;
+  return { answers, local, topic, error, asked };
+}
+
+// You picked why you hid a post (a chip under it, or "Other…" in your words).
+async function feedbackReason(platform, key, choice) {
+  const id = feedbackId(platform, key);
+  const settings = await getSettings();
+  const reason = await mutateStore((s) => {
+    const e = findFeedback(s, id);
+    if (!e || e.action !== 'hide') return null;
+    const next = chosenReason(choice, e, settings);
+    if (!next) throw new Error('Unknown reason');
+    if (e.reason?.kind === 'author' && s.authors[e.reason.id]?.from === id) delete s.authors[e.reason.id];
+    e.reason = next;
+    e.by = 'user';
+    if (next.kind === 'author') s.authors[next.id] = { label: next.who, from: id, at: Date.now() };
+    if (next.kind === 'rule' && !next.custom && s.rules[next.id]) {
+      delete s.rules[next.id].deleted; // picking a filter you deleted brings it back
+      delete s.rules[next.id].off;
+    }
+    return next;
+  });
+  forgetModel();
+  if (!reason) return { gone: true };
+
+  // Picking a category you have off is how you turn it on from the feed.
+  const cat = reason.kind === 'category' && CATEGORIES.find((c) => c.id === reason.id);
+  if (cat && !isCategoryEnabled(settings, cat)) {
+    const next = structuredClone(settings);
+    next.categories[cat.id] = true;
+    await saveSettings(next);
+    settingsPromise = null;
+    forgetModel();
+  }
+  return reasonReply(reason);
+}
+
+// Only reasons Deslop could have offered, rebuilt from trusted data.
+function chosenReason(choice, entry, settings) {
+  if (choice?.kind === 'other') return ruleFromText(choice.text);
+  if (choice?.kind === 'post') return JUST_THIS_POST;
+  if (choice?.kind === 'author') return authorReason({ platform: entry.platform, author: entry.post?.author });
+  if (choice?.kind === 'category') {
+    if (choice.id === 'off_topic') return { kind: 'category', id: 'off_topic', label: 'Outside your focus' };
+    const cat = CATEGORIES.find((c) => c.id === choice.id);
+    return cat ? { kind: 'category', id: cat.id, label: cat.label } : null;
+  }
+  if (choice?.kind === 'rule' && choice.custom) {
+    const rule = (settings.customRules || []).find((r) => customRuleId(r) === choice.id);
+    return rule ? { kind: 'rule', id: choice.id, label: rule, custom: true } : null;
+  }
+  if (choice?.kind === 'rule' && choice.topic) {
+    const r = topicReason(choice.topic, {}, settings);
+    return r && reasonOf(r);
+  }
+  if (choice?.kind === 'rule') return ruleFromText(choice.text);
+  return null;
+}
+
+async function reasonReply(reason, options) {
+  const [settings, model] = await Promise.all([getSettings(), getModel()]);
+  return { reason, options, message: describeReason(reason, model, settings) };
+}
+
+// You unhid a post Deslop hid: the filters that hid it learn from it. From the
+// popup there's no post, so the snippet from "Recently hidden" stands in.
+async function feedbackShow({ platform, key, post, fired = [] }) {
+  const id = feedbackId(platform, key);
+  const [settings, model] = await Promise.all([getSettings(), getModel()]);
+  const { recent = [] } = await chrome.storage.local.get('recent');
+  const seen = post || fromRecent(recent.find((r) => r.platform === platform && r.key === key));
+  const answers = (await answersCache.get(id))?.answers || {};
+  const { q, s } = snapshot(answers, seen ? localSignals(seen) : {}, settings, platform, model);
+  const reasons = fired.map((r) => ({ id: String(r.id || ''), label: String(r.label || ''), value: Number(r.value) || 0 }));
+  await mutateStore((st) =>
+    putFeedback(st, { id, platform, key, action: 'show', at: Date.now(), post: keepPost(seen || {}), fired: reasons, q, s }),
+  );
+  forgetModel();
+  await updateRecent((list) => list.map((r) => (r.platform === platform && r.key === key ? { ...r, fixed: 'shown' } : r)));
+  return { message: describeShow(reasons, settings) };
+}
+
+function fromRecent(r) {
+  return r && { text: r.snippet || '', author: { name: r.author, handle: r.handle || undefined }, url: r.url };
+}
+
+// Forget your decision about a post, and anything it taught.
+async function feedbackUndo(platform, key) {
+  const id = feedbackId(platform, key);
+  const removed = await mutateStore((s) => {
+    const e = removeFeedback(s, id);
+    if (e?.reason?.kind === 'author' && s.authors[e.reason.id]?.from === id) delete s.authors[e.reason.id];
+    return e;
+  });
+  forgetModel();
+  await updateRecent((list) =>
+    removed?.action === 'hide'
+      ? list.filter((r) => !(r.platform === platform && r.key === key && r.manual))
+      : list.map((r) => (r.platform === platform && r.key === key ? { ...r, fixed: undefined } : r)),
+  );
+  return { ok: true };
+}
+
+async function editRule(id, patch = {}) {
+  await mutateStore((s) => {
+    const r = (s.rules[id] ||= {});
+    if (patch.on) Object.assign(r, { on: true, off: false });
+    if (patch.off) Object.assign(r, { off: true, on: false });
+    if (patch.deleted) r.deleted = true;
+    if (typeof patch.label === 'string' && patch.label.trim()) r.label = patch.label.trim().slice(0, 80);
+  });
+  forgetModel();
+  return { ok: true };
+}
+
+async function editAuthor(key, label, block) {
+  await mutateStore((s) => {
+    if (block) s.authors[key] = { label: label || key, at: Date.now() };
+    else delete s.authors[key];
+  });
+  forgetModel();
+  return { ok: true };
+}
+
+async function exportFeedback() {
+  const [store, settings, model, stats] = await Promise.all([readStore(), getSettings(), getModel(), readStats()]);
+  return exportBundle(store, settings, { hits: stats.hits, model, version: chrome.runtime.getManifest?.().version || '' });
 }
 
 // ── Country filter ──────────────────────────────────────────────────────────
@@ -201,6 +475,7 @@ async function readStats() {
   const { stats } = await chrome.storage.local.get('stats');
   const s = stats || { day: today(), hiddenToday: 0, hiddenTotal: 0, byReason: {}, spendToday: 0, spendTotal: 0, checksToday: 0 };
   if (s.day !== today()) Object.assign(s, { day: today(), hiddenToday: 0, byReason: {}, spendToday: 0, checksToday: 0 });
+  s.hits ||= {}; // posts hidden per filter, all time (learned filters use it to spot mistakes)
   return s;
 }
 
@@ -230,11 +505,28 @@ async function recordHidden(entry) {
     s.hiddenTotal += 1;
     const id = entry.reasonId || 'other';
     s.byReason[id] = (s.byReason[id] || 0) + 1;
+    const hit = entry.reasons?.[0]?.id;
+    if (hit) s.hits[hit] = (s.hits[hit] || 0) + 1;
   });
-  const { recent = [] } = await chrome.storage.local.get('recent');
-  recent.unshift({ ...entry, at: Date.now() });
-  await chrome.storage.local.set({ recent: recent.slice(0, 60) });
+  await addRecent(entry);
   return { ok: true };
+}
+
+// "Recently hidden" in the popup: newest first, one entry per post.
+let recentQueue = Promise.resolve();
+function updateRecent(fn) {
+  recentQueue = recentQueue.catch(() => {}).then(async () => {
+    const { recent = [] } = await chrome.storage.local.get('recent');
+    await chrome.storage.local.set({ recent: fn(recent).slice(0, 60) });
+  });
+  return recentQueue;
+}
+
+function addRecent(entry) {
+  return updateRecent((list) => [
+    { ...entry, at: Date.now() },
+    ...list.filter((r) => !(entry.key && r.platform === entry.platform && r.key === entry.key)),
+  ]);
 }
 
 async function recordError(err) {
@@ -242,9 +534,11 @@ async function recordError(err) {
 }
 
 async function getStats() {
-  const [stats, { recent = [], lastError = null }] = await Promise.all([
+  const [stats, { recent = [], lastError = null }, store, model] = await Promise.all([
     readStats(),
     chrome.storage.local.get(['recent', 'lastError']),
+    readStore(),
+    getModel(),
   ]);
   return {
     stats,
@@ -252,6 +546,7 @@ async function getStats() {
     lastError,
     hasKey: Boolean(await getApiKey()),
     cached: { posts: await answersCache.size(), accounts: await geoCache.size() },
+    learning: { corrections: store.feedback.length, filters: model.rules.filter((r) => r.active).length },
   };
 }
 

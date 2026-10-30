@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Deslop end-to-end, offline (learning from you)</title>
+  <script src="chrome-shim.js"></script>
+  <link rel="stylesheet" href="../src/content/content.css">
+  <style>
+    body { font: 15px/1.4 system-ui, sans-serif; max-width: 640px; margin: 20px auto; padding: 0 16px; background: #fff; color: #0f1419; }
+    article { padding: 12px 0; border-bottom: 1px solid #eff3f4; }
+    [data-testid='User-Name'] { font-weight: 700; display: flex; gap: 6px; }
+    [data-testid='User-Name'] a { color: inherit; text-decoration: none; }
+    [data-testid='tweetText'] { white-space: pre-wrap; margin-top: 4px; }
+    #report { white-space: pre-wrap; font: 12px/1.5 ui-monospace, Consolas, monospace; background: #f6f6f6; padding: 10px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Deslop end-to-end, offline: learning from you</h1>
+  <p>Real <code>background.js</code> + real content scripts on a mock X timeline, with Jev's API stubbed: hiding and unhiding posts yourself, picking reasons, learned thresholds, examples and filters, the popup's Unhide, and the anonymized export.</p>
+  <pre id="report">Running…</pre>
+  <div data-testid="SideNav_AccountSwitcher_Button">Me <span>@me_myself</span></div>
+  <main aria-label="Timeline"><div id="timeline"></div></main>
+  <script type="module" src="e2e-learning-offline.js"></script>
+</body>
+</html>

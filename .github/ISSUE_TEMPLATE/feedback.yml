@@ -1,0 +1,25 @@
+name: Share your feedback
+description: Share the anonymized feedback Deslop learned from you, to improve the filters everyone gets
+title: "Feedback: "
+labels: [feedback]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Deslop. In **Settings → Learning from you**, click **Export anonymized feedback**, read the file, then attach it below (drag it into the box) or paste its contents.
+
+        The file has the text of posts you hid or unhid, with links, @handles, emails and phone numbers removed, and what Jev thought of each one. It has no names, accounts or post links. **This issue is public**, so remove anything you'd rather not share.
+
+        Maintainers turn shared feedback into tuned thresholds, better examples and test cases with `scripts/learn-from-feedback.mjs`.
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Feedback file
+      description: Drag `deslop-feedback-<date>.json` here to attach it, or paste its contents.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else?
+      description: Posts Deslop keeps getting wrong, filters you wish it had, languages it struggles with.

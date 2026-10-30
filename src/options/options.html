@@ -134,6 +134,57 @@
       </div>
     </section>
 
+    <section class="card" id="learning">
+      <h2>Learning from you</h2>
+      <p class="muted">Hover a post and click its <span class="eye-icon" aria-label="hide">
+          <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg></span>
+        button to hide it yourself, or <b>Unhide</b> a post Deslop hid by mistake. Deslop works out why, tunes the filter involved,
+        shows Jev your post as an example and learns new filters, so the more you correct it, the better it fits your feed.</p>
+      <div class="toggles">
+        <label class="toggle">
+          <span class="switch"><input type="checkbox" id="learningEnabled"><span></span></span>
+          <span><b>Learn from what you hide and unhide</b><small>Off: only the individual posts you hid or unhid stay that way.</small></span>
+        </label>
+        <label class="toggle">
+          <span class="switch"><input type="checkbox" id="hideButton"><span></span></span>
+          <span><b>Hide button on posts</b><small>A small button in the top corner of every post, shown when you hover it.</small></span>
+        </label>
+        <label class="toggle">
+          <span class="switch"><input type="checkbox" id="autoRules"><span></span></span>
+          <span><b>Learn new filters on its own</b><small>When you hide two posts about a topic no filter covers (say, sports), start hiding that topic. Off: they're suggested here instead.</small></span>
+        </label>
+      </div>
+      <p class="muted small" id="learningSummary"></p>
+
+      <div class="learn-block" id="suggestionsBlock" hidden>
+        <h3>Suggestions</h3>
+        <ul id="suggestions" class="rules"></ul>
+      </div>
+      <div class="learn-block" id="learnedRulesBlock" hidden>
+        <h3>Learned filters</h3>
+        <ul id="learnedRules" class="rules"></ul>
+      </div>
+      <div class="learn-block" id="adjustedBlock" hidden>
+        <h3>Tuned to you</h3>
+        <ul id="adjusted" class="rules"></ul>
+      </div>
+      <div class="learn-block" id="authorsBlock" hidden>
+        <h3>Accounts you hide</h3>
+        <ul id="learnedAuthors" class="rules"></ul>
+      </div>
+
+      <h3>Help improve Deslop for everyone</h3>
+      <p class="muted small">Your feedback never leaves this browser on its own. Export it and share it with the Deslop project, where feedback from many people
+        tunes the filters everyone gets. The file has the text of the posts you hid or unhid, with links, @handles, emails and phone numbers removed,
+        and what Jev thought of them. It has no names, accounts or post links. Read it before you share it.</p>
+      <div class="add-row">
+        <button class="btn" id="exportFeedback" type="button">Export anonymized feedback</button>
+        <a class="btn" href="https://github.com/RZ3M/deslop/issues/new?template=feedback.yml" target="_blank" rel="noopener">Share it on GitHub</a>
+        <button class="btn" id="resetLearning" type="button">Forget everything learned</button>
+      </div>
+      <p id="exportStatus" class="status"></p>
+    </section>
+
     <section class="card">
       <h2>Block countries</h2>
       <p class="muted">Hide posts from accounts based in these countries or regions.

@@ -216,6 +216,7 @@
     findPosts: () => document.querySelectorAll('article[data-testid="tweet"]'),
     extract,
     container: (article) => article.closest('[data-testid="cellInnerDiv"]') || article,
+    body: (article) => article.querySelector('[data-testid="tweetText"]'),
     skip: (post) => {
       if (post.id && post.id === focalTweetId()) return true; // the tweet you opened
       const me = ownHandle();

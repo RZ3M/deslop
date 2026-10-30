@@ -15,8 +15,11 @@ import {
   fancyFonts,
   fancyFontScore,
   localSignals,
+  learnedRuleId,
+  analysisQuestions,
 } from '../src/lib/classify.js';
-import { QUESTIONS, CATEGORIES, focusQuestion } from '../src/lib/questions.js';
+import { QUESTIONS, CATEGORIES, focusQuestion, withExamples, LEARNING } from '../src/lib/questions.js';
+import { fitThreshold, learnFrom, attribute, explain, topicReason, describeReason, scrub, exportBundle, summarize } from '../src/lib/learn.js';
 import { createLimiter } from '../src/lib/jev.js';
 
 const results = [];
@@ -362,6 +365,178 @@ await test('limiter caps concurrency', async () => {
     ),
   );
   eq(peak, 2);
+});
+
+// ── Learning from you ───────────────────────────────────────────────────────
+const learnBase = { ...base, learning: { enabled: true, autoRules: true } };
+let fbSeq = 0;
+const hid = (reason, { s = {}, q = {}, text = `hidden post ${++fbSeq}`, by = 'auto', author } = {}) => ({
+  id: `x:h${++fbSeq}`, platform: 'x', key: `h${fbSeq}`, action: 'hide', at: fbSeq,
+  post: { text, author: author || { handle: `@a${fbSeq}` } }, q, s, reason, by,
+});
+const kept = (fired, { s = {}, q = {}, text = `kept post ${++fbSeq}`, author } = {}) => ({
+  id: `x:k${++fbSeq}`, platform: 'x', key: `k${fbSeq}`, action: 'show', at: fbSeq,
+  post: { text, author: author || { handle: `@b${fbSeq}` } }, q, s, fired,
+});
+const cat = (id) => ({ kind: 'category', id, label: CATEGORIES.find((c) => c.id === id)?.label || id });
+const sportsRule = () => ({ ...topicReason('sports') });
+
+await test('a threshold moves just past a post you corrected, within bounds', () => {
+  eq(fitThreshold(0.8, [{ v: 0.85, hide: false }]), 0.86, 'unhid at 85%');
+  eq(fitThreshold(0.8, [{ v: 0.7, hide: true }]), 0.7, 'hid yourself at 70%');
+  eq(fitThreshold(0.8, [{ v: 0.99, hide: false }]), 0.8, 'out of reach: left to examples');
+  eq(fitThreshold(0.8, [{ v: 0.5, hide: true }]), 0.8, 'more than maxShift away');
+  eq(fitThreshold(0.8, []), 0.8);
+  eq(fitThreshold(0.8, [{ v: 0.84, hide: false }, { v: 0.86, hide: true }]), 0.85, 'splits your hides and keeps');
+  eq(fitThreshold(0.8, [{ v: 0.85, hide: false }, { v: 0.85, hide: true }]), 0.8, 'conflicting feedback stays put');
+});
+
+await test('feedback tunes the filters involved', () => {
+  const store = {
+    feedback: [
+      kept([{ id: 'engagement_bait', label: 'Engagement bait', value: 0.85 }], { s: { engagement_bait: 0.85, clickbait: 0.2 }, q: { withholds_payoff: 0.85, engagement_farming: 0.1 } }),
+      hid(cat('clickbait'), { s: { clickbait: 0.7 }, q: { clickbait_hook: 0.7 } }),
+    ],
+  };
+  const m = learnFrom(store, learnBase);
+  eq(m.thresholds, { engagement_bait: 0.86, clickbait: 0.7 });
+  eq(m.corrections.engagement_bait, { hidden: 0, kept: 1 });
+  eq(verdictFrom(answers({ bait: 0.85 }), learnBase, 'x', {}, m).hide, false, 'learned threshold applies');
+  eq(verdictFrom(answers({ bait: 0.87 }), learnBase, 'x', {}, m).hide, true);
+  eq(verdictFrom(answers({ click: 0.72 }), learnBase, 'x', {}, m).reasons[0]?.id, 'clickbait');
+  const strict = learnFrom(store, { ...learnBase, strictness: 'strict' }).thresholds;
+  eq([strict.engagement_bait, strict.clickbait], [undefined, undefined], 'refitted around Strict (65%): 85% is out of reach, 70% already hidden');
+});
+
+await test('your posts become examples in the questions that judged them', () => {
+  const store = {
+    feedback: [
+      kept([{ id: 'engagement_bait', label: 'Engagement bait', value: 0.9 }], { text: 'KEPT', q: { withholds_payoff: 0.9, engagement_farming: 0.2 } }),
+      hid(cat('engagement_bait'), { text: 'HID', q: { withholds_payoff: 0.3, engagement_farming: 0.6 } }),
+      ...Array.from({ length: 5 }, (_, i) => hid(cat('clickbait'), { text: `CLICK ${i}` })),
+    ],
+  };
+  const m = learnFrom(store, learnBase);
+  eq(m.examples.withholds_payoff, { hide: [], keep: ['KEPT'] }, 'only the question that fired');
+  eq(m.examples.engagement_farming, { hide: ['HID'], keep: [] }, 'the strongest question');
+  eq(m.examples.clickbait_hook.hide, ['CLICK 0', 'CLICK 1', 'CLICK 2'], `newest ${LEARNING.examplesPerSide} only`);
+  const q = questionsFor(learnBase, 'x', m);
+  eq(q.withholds_payoff.criteria.false.examples.at(-1), 'KEPT');
+  eq(q.engagement_farming.criteria.true.examples.at(-1), 'HID');
+  if (!/this user/.test(q.withholds_payoff.instructions.user_examples)) throw new Error('no note about user examples');
+  eq(q.ai_style, QUESTIONS.ai_style, 'questions without feedback are untouched');
+});
+
+await test('examples work for every kind of question', () => {
+  const ex = { hide: ['H'], keep: ['K'] };
+  const prof = withExamples(QUESTIONS.profanity, ex);
+  eq([prof.criteria.true.what, prof.criteria.true.examples, prof.criteria.false.examples], [QUESTIONS.profanity.criteria.true, ['H'], ['K']], 'string criteria');
+  const ai = withExamples(QUESTIONS.ai_style, ex);
+  eq(ai.criteria.map((c) => c.examples || null), [null, ['K'], ['H'], null], 'score levels');
+  const focus = withExamples(focusQuestion(['AI']), ex, { invert: true });
+  eq([focus.criteria.true.examples, focus.criteria.false.examples], [['K'], ['H']], 'focus: kept posts are on-topic');
+  if (withExamples(QUESTIONS.politics, { hide: [], keep: [] }) !== QUESTIONS.politics) throw new Error('no examples, same question');
+});
+
+await test('new examples re-ask only the question they change', () => {
+  const qs = questionsFor(learnBase, 'x');
+  const entry = mergeAnswers(undefined, qs, Object.fromEntries(Object.keys(qs).map((id) => [id, { type: 'noul', noul: 0 }])));
+  const m = learnFrom({ feedback: [hid(cat('clickbait'), { q: { clickbait_hook: 0.7 } })] }, learnBase);
+  eq(Object.keys(missingQuestions(entry, questionsFor(learnBase, 'x', m))), ['clickbait_hook']);
+});
+
+await test('topics you keep hiding become filters', () => {
+  const one = learnFrom({ feedback: [hid(sportsRule())] }, learnBase);
+  eq([one.rules[0].label, one.rules[0].status], ['Sports', 'learning'], 'one hide: learning');
+  eq(Object.keys(questionsFor(learnBase, 'x', one)).includes(one.rules[0].id), false, 'not asked yet');
+  const two = learnFrom({ feedback: [hid(sportsRule()), hid(sportsRule())] }, learnBase);
+  eq(two.rules[0].status, 'active', 'two hides: on');
+  const id = two.rules[0].id;
+  eq(questionsFor(learnBase, 'x', two)[id].instructions.rule, topicReason('sports').text);
+  eq(verdictFrom({ [id]: { type: 'noul', noul: 0.9 } }, learnBase, 'x', {}, two).reasons.map((r) => r.label), ['Sports']);
+  eq(learnFrom({ feedback: [hid(sportsRule(), { by: 'user' })] }, learnBase).rules[0].status, 'active', 'you picked it: on at once');
+  eq(learnFrom({ feedback: [hid(sportsRule()), hid(sportsRule())] }, { ...learnBase, learning: { autoRules: false } }).rules[0].status, 'suggested');
+  eq(learnFrom({ feedback: [hid(sportsRule())], rules: { [id]: { on: true } } }, learnBase).rules[0].status, 'active', 'you turned it on');
+  eq(learnFrom({ feedback: [hid(sportsRule()), hid(sportsRule())], rules: { [id]: { off: true } } }, learnBase).rules[0].status, 'off');
+  eq(learnFrom({ feedback: [hid(sportsRule())], rules: { [id]: { deleted: true } } }, learnBase).rules, [], 'deleted');
+});
+
+await test('a learned filter pauses when you keep unhiding what it hides', () => {
+  const id = learnedRuleId(topicReason('sports').text);
+  const fired = [{ id, label: 'Sports', value: 0.9 }];
+  const store = { feedback: [kept(fired), kept(fired), hid(sportsRule()), hid(sportsRule())] };
+  eq(learnFrom(store, learnBase, { [id]: 3 }).rules[0].status, 'active', 'too few hits to judge');
+  eq(learnFrom(store, learnBase, { [id]: 4 }).rules[0].status, 'paused', 'you unhid half of what it hid');
+  eq(learnFrom(store, learnBase, { [id]: 10 }).rules[0].status, 'active', 'mostly right');
+});
+
+await test('learning off ignores your feedback', () => {
+  const m = learnFrom({ feedback: [hid(cat('clickbait'), { s: { clickbait: 0.7 } }), hid(sportsRule(), { by: 'user' })], authors: { 'x:@a': { label: '@a' } } }, { ...learnBase, learning: { enabled: false } });
+  eq([m.thresholds, m.rules, m.authors, m.examples], [{}, [], {}, {}]);
+});
+
+await test('why you hid a post', () => {
+  const all = Object.fromEntries(Object.keys(QUESTIONS).map((id) => [id, { type: 'noul', noul: 0.05 }]));
+  all.ai_style = { type: 'score', score: 0, legend: { 0: 'a', 1: 'b', 2: 'c', 3: 'd' } };
+  const post = { platform: 'x', author: { handle: '@hal' } };
+  const sports = { id: 'sports', p: 0.9 };
+  const pick = (over, topic) => attribute({ signals: explain({ ...all, ...over }, {}, learnBase, 'x'), topic, post }, {}, learnBase);
+
+  eq(pick({ clickbait_hook: { type: 'noul', noul: 0.7 } }, sports).reason.id, 'clickbait', 'a clear filter beats the topic');
+  eq(pick({ clickbait_hook: { type: 'noul', noul: 0.55 } }, sports).reason.label, 'Sports', 'the topic beats a weak filter');
+  eq(pick({ clickbait_hook: { type: 'noul', noul: 0.55 } }).reason.id, 'clickbait', 'a weak filter beats nothing');
+  const none = pick({});
+  eq(none.reason.kind, 'post', 'nothing explains it');
+  eq(none.options.map((o) => o.kind), ['author', 'post'], 'still offers the author and just this post');
+  const politics = pick({ politics: { type: 'noul', noul: 0.95 } });
+  eq([politics.reason.id, politics.options[0].off], ['politics', true], 'a filter you have off');
+  eq(describeReason(politics.reason, undefined, learnBase).startsWith('Looks like Politics'), true);
+  eq(pick({}, { id: 'politics', p: 0.9 }).reason.id, 'politics', 'a topic with a category uses the category');
+  const deleted = { rules: { [learnedRuleId(topicReason('sports').text)]: { deleted: true } } };
+  eq(attribute({ signals: [], topic: sports, post }, deleted, learnBase).reason.kind, 'post', "a filter you deleted isn't learned again");
+  const all2 = analysisQuestions(learnBase, 'x');
+  eq(['politics', 'rage_bait', 'topic'].every((id) => all2[id]), true, 'analysis asks categories you have off and the topic');
+});
+
+await test('suggestions from your feedback', () => {
+  const sam = { handle: '@sam' };
+  const pat = { handle: '@pat' };
+  const m = learnFrom(
+    {
+      feedback: [
+        hid(cat('politics')),
+        hid(cat('clickbait'), { author: sam }),
+        hid({ kind: 'post', id: 'post' }, { author: sam }),
+        kept([], { author: pat }),
+        kept([], { author: pat }),
+      ],
+    },
+    learnBase,
+  );
+  eq(m.suggestions.map((s) => `${s.type}:${s.id || s.label}:${s.n}`), ['enable:politics:1', 'block:@sam:2', 'allow:@pat:2']);
+  eq(learnFrom({ feedback: [kept([], { author: pat }), kept([], { author: pat })] }, { ...learnBase, allowlist: ['pat'] }).suggestions, [], 'already allowed');
+});
+
+await test('shared feedback is anonymized', () => {
+  eq(scrub('ask @bob at bob@example.com or +1 (555) 123-4567, see https://x.co/a and example.com/page'), 'ask @someone at <email> or <number>, see <link> and <link>');
+  const custom = customRuleId('My secret rule');
+  const store = {
+    feedback: [
+      hid(sportsRule(), { text: 'Derby day @rival https://t.co/x', author: { name: 'Sam Lee', handle: '@samlee' } }),
+      hid({ kind: 'rule', id: custom, label: 'My secret rule', custom: true }, { s: { [custom]: 0.9, clickbait: 0.2 }, q: { [custom]: 0.9, clickbait_hook: 0.2 } }),
+      kept([{ id: 'engagement_bait', label: 'Engagement bait', value: 0.85 }, { id: custom, label: 'My secret rule', value: 0.9 }], { s: { engagement_bait: 0.85 } }),
+      hid({ kind: 'pending', id: 'pending', label: '…' }),
+    ],
+  };
+  const settings = { ...learnBase, customRules: ['My secret rule'] };
+  const bundle = exportBundle(store, settings, { model: learnFrom(store, settings), version: '9.9', now: 0 });
+  const json = JSON.stringify(bundle);
+  for (const secret of ['samlee', 'Sam Lee', 'rival', 't.co', 'My secret rule', custom]) if (json.includes(secret)) throw new Error(`leaked ${secret}`);
+  eq(bundle.feedback.length, 3, 'unfinished analyses are left out');
+  eq(bundle.feedback[0].reason, { kind: 'rule', topic: 'sports', by: 'auto' });
+  eq(bundle.feedback[1].values, { clickbait_hook: 0.2 }, 'only shared questions');
+  eq(bundle.feedback[2].fired, ['engagement_bait', 'custom']);
+  eq(summarize(store, learnFrom(store, settings), settings).hidden, 3);
 });
 
 const out = document.getElementById('out');

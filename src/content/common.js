@@ -8,7 +8,8 @@
   const PENDING_MAX_MS = 4000; // never keep a post blurred longer than this
   const GEO_WAIT_MS = 1500; // wait this long for a location before revealing
 
-  D.state = { settings: null, hasKey: false };
+  D.state = { settings: null, hasKey: false, overrides: {} }; // overrides: your own hide/unhide per post
+  const OVERRIDES_KEY = 'learning:overrides'; // see src/lib/feedback.js
 
   D.send = (type, payload = {}) =>
     new Promise((resolve) => {
@@ -125,6 +126,9 @@
   D.createEngine = (adapter) => {
     const platform = adapter.platform;
     const tracked = new Map(); // post element -> post key currently rendered
+    const posts = new WeakMap(); // post element -> extracted post
+    const owners = new WeakMap(); // container -> post element
+    const noButton = new WeakSet(); // posts that never get a hide button (your own)
     const decisions = new Map(); // post key -> decision (instant re-render after virtualization)
     const geoMemo = new Map(); // place key -> Promise<geo verdict>
     const reported = new Set();
@@ -132,6 +136,13 @@
 
     const settings = () => D.state.settings;
     const active = () => settings()?.enabled && settings()?.platforms?.[platform];
+    const mine = (key) => D.state.overrides?.[`${platform}:${key}`];
+    const setMine = (key, value) => {
+      const next = { ...D.state.overrides };
+      if (value) next[`${platform}:${key}`] = value;
+      else delete next[`${platform}:${key}`];
+      D.state.overrides = next;
+    };
 
     function scheduleScan() {
       if (scanScheduled) return;
@@ -156,12 +167,27 @@
         return;
       }
       if (!post) return;
-      if (tracked.get(el) === post.key) return;
+      if (tracked.get(el) === post.key) return ensureButton(el);
       tracked.set(el, post.key);
+      posts.set(el, post);
 
       const container = adapter.container(el);
+      owners.set(container, el);
       clear(container);
-      if (adapter.skip(post, el) || isAllowlisted(post)) return;
+      if (adapter.skip(post, el)) {
+        noButton.add(el);
+        return ensureButton(el);
+      }
+      noButton.delete(el);
+      ensureButton(el);
+
+      // Your own decision about this post comes first.
+      const own = mine(post.key);
+      if (own?.a === 'h') {
+        const known = decisions.get(post.key);
+        return render(el, container, post, known?.manual ? known : manualDecision(own.r));
+      }
+      if (own?.a === 's' || isAllowlisted(post)) return;
 
       const known = decisions.get(post.key);
       if (known) return render(el, container, post, known);
@@ -183,7 +209,9 @@
       let geo = null;
       let quickGeo = null;
       if (textRes.ok && textRes.result.hide) {
-        decision = { hide: true, reasons: textRes.result.reasons };
+        decision = textRes.result.manual
+          ? manualDecision()
+          : { hide: true, reasons: textRes.result.reasons };
       } else {
         geo = countryCheck(post);
         quickGeo = await Promise.race([geo, D.sleep(GEO_WAIT_MS).then(() => 'slow')]);
@@ -196,7 +224,7 @@
 
       if (!decision.hide && quickGeo === 'slow') {
         geo.then((g) => {
-          if (!g?.blocked || tracked.get(el) !== post.key) return;
+          if (!g?.blocked || tracked.get(el) !== post.key || mine(post.key)) return;
           const late = countryDecision(g);
           decisions.set(post.key, late);
           render(el, container, post, late);
@@ -236,54 +264,292 @@
     function render(el, container, post, decision) {
       clear(container);
       if (!decision.hide) return;
-      if (decision.revealed) return reveal(container, decision);
+      const ctx = { el, container, post, decision };
+      if (decision.revealed) return reveal(ctx);
 
       if (!reported.has(post.key)) {
         reported.add(post.key);
         const top = decision.reasons[0];
-        D.send('hidden', {
-          entry: {
-            platform,
-            author: post.author?.name || post.author?.handle || '',
-            handle: post.author?.handle || post.author?.slug || '',
-            snippet: (post.text || '').slice(0, 160),
-            url: post.url || '',
-            reasonId: top?.id?.startsWith('custom_') ? 'custom' : top?.id,
-            reasons: decision.reasons.map((r) => ({ label: r.label, value: r.value })),
-          },
-        });
+        // Posts you hid yourself are recorded when you hide them.
+        if (!decision.manual) {
+          D.send('hidden', {
+            entry: {
+              platform,
+              key: post.key,
+              author: post.author?.name || post.author?.handle || '',
+              handle: post.author?.handle || post.author?.slug || '',
+              snippet: (post.text || '').slice(0, 160),
+              url: post.url || '',
+              reasonId: top?.id?.startsWith('custom_') ? 'custom' : top?.id,
+              reasons: decision.reasons.map((r) => ({ id: r.id, label: r.label, value: r.value })),
+            },
+          });
+        }
         adapter.onHidden?.(el, post, decision);
       }
 
-      if (settings().hideMode === 'collapse') collapse(container, decision);
-      else container.dataset.deslop = 'hidden';
+      // A post you just hid keeps its bar, so you can say why or undo it.
+      if (settings().hideMode === 'collapse' || decision.fresh) return decision.manual ? showManual(ctx) : collapse(ctx);
+      container.dataset.deslop = 'hidden';
     }
 
     // Placeholder bar with a Show button. Show and Hide again only change
     // data-deslop once each, so the post doesn't flicker.
-    function collapse(container, decision) {
+    function collapse(ctx) {
+      const { container, decision } = ctx;
       container.dataset.deslop = 'collapsed';
-      setBar(container, null, `Deslop hid a post — ${why(decision)}`, 'Show', () => {
-        decision.revealed = true;
-        reveal(container, decision);
+      setBar(container, {
+        text: `Deslop hid a post — ${why(decision)}`,
+        actions: [
+          {
+            label: 'Show',
+            onClick: () => {
+              decision.revealed = true;
+              reveal(ctx);
+            },
+          },
+        ],
       });
     }
 
-    // A post the user chose to see: marked so it stands out from the feed,
-    // with a button to hide it again.
-    function reveal(container, decision) {
+    // A post you chose to see: marked so it stands out from the feed, with a
+    // button to hide it again, or to unhide it for good and teach Deslop.
+    function reveal(ctx) {
+      const { container, decision } = ctx;
       container.dataset.deslop = 'revealed';
-      setBar(container, 'Shown', `Deslop hid this — ${why(decision)}`, 'Hide again', () => {
-        decision.revealed = false;
-        collapse(container, decision);
+      setBar(container, {
+        tag: 'Shown',
+        text: `Deslop hid this — ${why(decision)}`,
+        actions: [
+          {
+            label: 'Hide again',
+            onClick: () => {
+              decision.revealed = false;
+              collapse(ctx);
+            },
+          },
+          { label: 'Unhide', title: "Keep this post visible and teach Deslop it shouldn't have hidden it", onClick: () => unhide(ctx) },
+        ],
       });
     }
 
-    function setBar(container, tag, text, label, onClick) {
+    // ── Hiding and unhiding posts yourself ──────────────────────────────────
+    // Each one is sent to the background as feedback (src/lib/learn.js), which
+    // works out why and learns from it.
+
+    function manualDecision(label = '') {
+      return { hide: true, manual: true, reasons: [{ id: 'manual', label: 'Hidden by you', value: 1 }], message: label };
+    }
+
+    const showing = (ctx) => tracked.get(ctx.el) === ctx.post.key && decisions.get(ctx.post.key) === ctx.decision;
+
+    async function hideByUser(el) {
+      const post = posts.get(el);
+      if (!post || tracked.get(el) !== post.key || mine(post.key)?.a === 'h') return;
+      const container = adapter.container(el);
+      const prev = decisions.get(post.key);
+      const decision = { ...manualDecision('Learning why…'), fresh: true, prev: prev?.hide ? null : prev };
+      const ctx = { el, container, post, decision };
+      setMine(post.key, { a: 'h' });
+      decisions.set(post.key, decision);
+      render(el, container, post, decision);
+
+      const res = await D.send('feedback:hide', { post });
+      if (!showing(ctx)) return;
+      if (!res.ok) decision.message = `Hidden, but Deslop couldn't save it (${res.error})`;
+      else if (!res.result.gone) Object.assign(decision, { reason: res.result.reason, options: res.result.options, message: res.result.message });
+      showManual(ctx);
+    }
+
+    function showManual(ctx) {
+      const { container, decision } = ctx;
+      if (container.dataset.deslop !== 'collapsed') container.dataset.deslop = 'collapsed';
+      let extra = {};
+      if (decision.fresh && decision.editing) {
+        extra = {
+          input: {
+            onSubmit: (text) => {
+              decision.editing = false;
+              pickReason(ctx, { kind: 'other', text });
+            },
+            onCancel: () => {
+              decision.editing = false;
+              showManual(ctx);
+            },
+          },
+        };
+      } else if (decision.fresh && decision.options?.length) {
+        extra = { chips: { options: decision.options, selected: decision.reason, onPick: (opt) => pickReason(ctx, opt) } };
+      }
+      setBar(container, {
+        tag: 'Hidden by you',
+        text: decision.message || '',
+        actions: [{ label: 'Undo', title: 'Show this post again and forget you hid it', onClick: () => undoHide(ctx) }],
+        ...extra,
+      });
+    }
+
+    async function pickReason(ctx, opt) {
+      const { post, decision } = ctx;
+      if (opt.kind === 'other' && !opt.text) {
+        decision.editing = true;
+        return showManual(ctx);
+      }
+      decision.message = 'Learning…';
+      if (opt.kind !== 'other') decision.reason = opt;
+      showManual(ctx);
+      const res = await D.send('feedback:reason', { platform, key: post.key, reason: opt });
+      if (!showing(ctx)) return;
+      if (!res.ok) decision.message = `Couldn't save that (${res.error})`;
+      else if (!res.result.gone) {
+        const { reason, message } = res.result;
+        if (!decision.options.some((o) => o.kind === reason.kind && o.id === reason.id)) decision.options.unshift(reason);
+        Object.assign(decision, { reason, message });
+      }
+      showManual(ctx);
+    }
+
+    async function undoHide(ctx) {
+      const { el, container, post, decision } = ctx;
+      setMine(post.key, null);
+      if (decision.prev) {
+        decisions.set(post.key, decision.prev);
+        render(el, container, post, decision.prev);
+        D.send('feedback:undo', { platform, key: post.key });
+        return;
+      }
+      // Hidden on an earlier visit: judge the post again once Deslop forgets.
+      decisions.delete(post.key);
+      clear(container);
+      await D.send('feedback:undo', { platform, key: post.key });
+      if (tracked.get(el) === post.key) tracked.delete(el);
+      scheduleScan();
+    }
+
+    async function unhide(ctx) {
+      const { post, decision } = ctx;
+      const kept = { hide: false, kept: true, prev: decision, message: 'Unhidden. Learning…' };
+      const kctx = { ...ctx, decision: kept };
+      setMine(post.key, { a: 's' });
+      decisions.set(post.key, kept);
+      showKept(kctx);
+      const fired = decision.reasons.map(({ id, label, value }) => ({ id, label, value }));
+      const res = await D.send('feedback:show', { platform, key: post.key, post, fired });
+      if (!showing(kctx)) return;
+      kept.message = res.ok ? res.result.message : `Unhidden, but Deslop couldn't save it (${res.error})`;
+      showKept(kctx);
+    }
+
+    function showKept(ctx) {
+      const { container, decision } = ctx;
+      if (container.dataset.deslop !== 'kept') container.dataset.deslop = 'kept';
+      setBar(container, {
+        tag: 'Unhidden',
+        text: decision.message,
+        actions: [{ label: 'Undo', title: 'Let Deslop hide this post again', onClick: () => undoUnhide(ctx) }],
+      });
+    }
+
+    function undoUnhide(ctx) {
+      const { el, container, post, decision } = ctx;
+      setMine(post.key, null);
+      const prev = { ...decision.prev, revealed: false };
+      decisions.set(post.key, prev);
+      render(el, container, post, prev);
+      D.send('feedback:undo', { platform, key: post.key });
+    }
+
+    // You changed a decision elsewhere (the popup's "Recently hidden" list).
+    function applyOverrides(before, after) {
+      for (const [el, key] of tracked) {
+        const id = `${platform}:${key}`;
+        if (before[id]?.a === after[id]?.a) continue;
+        const post = posts.get(el);
+        const container = adapter.container(el);
+        if (after[id]?.a === 'h') {
+          const d = manualDecision(after[id].r);
+          decisions.set(key, d);
+          render(el, container, post, d);
+        } else if (after[id]?.a === 's') {
+          decisions.set(key, { hide: false, reasons: [] });
+          clear(container);
+        } else {
+          decisions.delete(key);
+          tracked.delete(el); // judge it again
+        }
+      }
+      scheduleScan();
+    }
+
+    // ── The hide button ─────────────────────────────────────────────────────
+    // On every post, shown when you hover it. It sits just left of the buttons
+    // in the post's top right (X's ⋯ and Grok; LinkedIn's ⋯, ✕ and Follow),
+    // wherever those are, so it never covers them.
+
+    function ensureButton(el) {
+      const container = adapter.container(el);
+      const existing = container.querySelector(':scope > .deslop-hide-btn');
+      if (noButton.has(el) || settings()?.learning?.hideButton === false) return existing?.remove();
+      if (existing) return;
+      if (getComputedStyle(container).position === 'static') container.dataset.deslopHost = 'relative';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'deslop-hide-btn';
+      btn.title = 'Hide this post. Deslop learns from it.';
+      btn.setAttribute('aria-label', 'Hide this post (Deslop)');
+      btn.append(hideIcon());
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        hideByUser(owners.get(container));
+      });
+      btn.addEventListener('focus', () => place(container));
+      container.addEventListener('pointerenter', () => place(container));
+      container.append(btn);
+    }
+
+    function removeButtons() {
+      for (const el of tracked.keys()) adapter.container(el).querySelector(':scope > .deslop-hide-btn')?.remove();
+    }
+
+    function place(container) {
+      const btn = container.querySelector(':scope > .deslop-hide-btn');
+      const el = owners.get(container);
+      if (!btn || !el) return;
+      const spot = headerSpot(el, container);
+      btn.style.top = spot ? `${spot.top}px` : '';
+      btn.style.right = spot ? `${spot.right}px` : '';
+    }
+
+    function headerSpot(el, container) {
+      const c = container.getBoundingClientRect();
+      const body = adapter.body?.(el)?.getBoundingClientRect();
+      const bottom = body?.height ? body.top : c.top + 80;
+      let left = Infinity;
+      let middle = null;
+      for (const b of el.querySelectorAll('button, [role="button"]')) {
+        if (b.closest('.deslop-bar, .deslop-hide-btn')) continue;
+        const r = b.getBoundingClientRect();
+        if (!r.width || r.bottom > bottom + 2 || r.left < c.left + c.width / 2) continue;
+        if (r.left < left) {
+          left = r.left;
+          middle = r.top + r.height / 2;
+        }
+      }
+      if (middle === null) return null;
+      return { top: Math.max(0, Math.round(middle - c.top - 15)), right: Math.max(0, Math.round(c.right - left + 6)) };
+    }
+
+    // ── Bars ────────────────────────────────────────────────────────────────
+
+    // A bar at the top of a post: a message, its buttons, and optionally a row
+    // of reasons to pick from or a field for your own.
+    function setBar(container, { tag, text, actions = [], chips = null, input = null }) {
       container.querySelectorAll(':scope > .deslop-bar').forEach((b) => b.remove());
       const bar = document.createElement('div');
       bar.className = 'deslop-bar';
       const msg = document.createElement('span');
+      msg.className = 'deslop-msg';
       if (tag) {
         const pill = document.createElement('b');
         pill.className = 'deslop-tag';
@@ -291,16 +557,74 @@
         msg.append(pill, ' ');
       }
       msg.append(text);
+      const buttons = document.createElement('span');
+      buttons.className = 'deslop-actions';
+      for (const a of actions) buttons.append(barButton(a.label, a.onClick, a.title));
+      bar.append(msg, buttons);
+      if (chips) bar.append(reasonChips(chips));
+      if (input) bar.append(reasonInput(input));
+      container.prepend(bar);
+    }
+
+    function barButton(label, onClick, title) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = label;
+      if (title) btn.title = title;
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         onClick();
       });
-      bar.append(msg, btn);
-      container.prepend(bar);
+      return btn;
+    }
+
+    const CHIP_TITLES = {
+      category: 'Hide more posts like this',
+      rule: 'Learn a filter for posts like this',
+      author: 'Hide every post from this account',
+      post: "Hide only this post; don't learn from it",
+      other: 'Describe in your own words what to hide',
+    };
+
+    function reasonChips({ options, selected, onPick }) {
+      const row = document.createElement('div');
+      row.className = 'deslop-chips';
+      const label = document.createElement('span');
+      label.textContent = 'Why?';
+      row.append(label);
+      for (const opt of [...options, { kind: 'other', id: 'other', label: 'Other…' }]) {
+        const title = opt.off ? 'Turn this filter on and hide posts like this' : CHIP_TITLES[opt.kind];
+        const chip = barButton(opt.off ? `${opt.label} (off)` : opt.label, () => onPick(opt), title);
+        chip.className = 'deslop-chip';
+        chip.setAttribute('aria-pressed', String(selected?.kind === opt.kind && selected?.id === opt.id));
+        row.append(chip);
+      }
+      return row;
+    }
+
+    function reasonInput({ onSubmit, onCancel }) {
+      const form = document.createElement('form');
+      form.className = 'deslop-chips deslop-other';
+      const field = document.createElement('input');
+      field.type = 'text';
+      field.maxLength = 200;
+      field.placeholder = 'Describe posts to hide, e.g. "Posts about my old company"';
+      field.setAttribute('aria-label', 'What should Deslop hide?');
+      // Keep X's and LinkedIn's keyboard shortcuts out of the field.
+      for (const type of ['keydown', 'keyup', 'keypress', 'click', 'paste']) field.addEventListener(type, (e) => e.stopPropagation());
+      const save = document.createElement('button');
+      save.type = 'submit';
+      save.textContent = 'Save';
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (field.value.trim()) onSubmit(field.value.trim());
+      });
+      form.addEventListener('click', (e) => e.stopPropagation());
+      form.append(field, save, barButton('Cancel', onCancel));
+      setTimeout(() => field.focus());
+      return form;
     }
 
     function why(decision) {
@@ -326,6 +650,7 @@
 
     function reset() {
       for (const el of tracked.keys()) clear(adapter.container(el));
+      if (!active()) removeButtons();
       tracked.clear();
       decisions.clear();
       geoMemo.clear();
@@ -339,6 +664,10 @@
     chrome.storage.onChanged.addListener((changes, area) => {
       if ((area === 'sync' && changes.settings) || (area === 'local' && changes.apiKey)) {
         D.loadSettings().then(() => D.onSettingsChanged());
+      } else if (area === 'local' && changes[OVERRIDES_KEY]) {
+        const before = D.state.overrides || {};
+        D.state.overrides = changes[OVERRIDES_KEY].newValue || {};
+        applyOverrides(before, D.state.overrides);
       }
     });
 
@@ -349,4 +678,24 @@
 
     return { scan, reset };
   };
+
+  // Eye with a slash, built with DOM APIs (no innerHTML in page contexts).
+  function hideIcon() {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', width: 16, height: 16, fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) {
+      svg.setAttribute(k, v);
+    }
+    for (const d of [
+      'M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94',
+      'M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19',
+      'M14.12 14.12a3 3 0 1 1-4.24-4.24',
+      'M1 1l22 22',
+    ]) {
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('d', d);
+      svg.append(path);
+    }
+    return svg;
+  }
 })();
