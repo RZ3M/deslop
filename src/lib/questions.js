@@ -645,6 +645,117 @@ export function locationQuestion(countryNames) {
   };
 }
 
+// ── Learning from you ───────────────────────────────────────────────────────
+// Posts you hide or unhide yourself teach Deslop (see learn.js). These knobs
+// bound how far your feedback can move things, so one stray click can't wreck
+// your feed.
+export const LEARNING = {
+  offer: 0.4, // a category or rule this sure is offered as the reason you hid a post
+  plausible: 0.5, // …is picked as the reason from this level up
+  confident: 0.65, // …and is preferred over the post's topic from this level up
+  topicOffer: 0.3, // a topic this likely is offered as the reason
+  topicMin: 0.5, // …and picked when no filter explains the post
+  maxShift: 0.15, // a learned threshold stays within this of the strictness threshold
+  prior: 4, // cost of moving a threshold by 1.0, in misjudged posts (0.25 ≈ one post)
+  examplesPerSide: 3, // per question: your newest hidden and kept posts become examples
+  exampleChars: 240,
+  ruleMinHides: 2, // a filter learned from your hides turns on after this many
+  pauseMinHits: 4, // …and pauses itself once it has hidden this many posts
+  pauseKeepRate: 0.5, // and you unhid at least this share of them
+};
+
+// When you hide a post no filter explains, its topic becomes a new filter.
+// `category` points at a built-in category instead of learning a duplicate.
+export const TOPICS = [
+  { id: 'sports', label: 'Sports', rule: 'Sports: games, teams, athletes, scores, transfers and betting' },
+  { id: 'celebrities', label: 'Celebrities & gossip', rule: 'Celebrity news, gossip and influencer drama' },
+  { id: 'entertainment', label: 'TV, movies & music', rule: 'TV shows, movies, music, streaming and pop culture' },
+  { id: 'gaming', label: 'Video games', rule: 'Video games, gaming news and esports' },
+  { id: 'crypto', label: 'Crypto & web3', rule: 'Crypto, NFTs, web3 and blockchain' },
+  { id: 'markets', label: 'Stocks & trading', rule: 'Stock picks, trading and market speculation' },
+  { id: 'ai', label: 'AI', rule: 'Artificial intelligence, chatbots and AI products' },
+  { id: 'startups', label: 'Startups & big tech', rule: 'Tech companies, startups, funding rounds and founders' },
+  { id: 'career_news', label: 'Career updates', rule: 'Personal career news: new jobs, promotions, work anniversaries and certifications' },
+  { id: 'hiring', label: 'Hiring & job hunting', rule: 'Job openings, hiring, layoffs and job hunting' },
+  { id: 'self_help', label: 'Productivity & self-help', rule: 'Productivity tips, habits, mindset and self-help advice' },
+  { id: 'marketing', label: 'Marketing & sales advice', rule: 'Marketing, sales, growth and personal-branding advice' },
+  { id: 'world_news', label: 'World news & conflicts', rule: 'World news, wars, conflicts and disasters' },
+  { id: 'politics', label: 'Politics', rule: 'Politics', category: 'politics' },
+  { id: 'religion', label: 'Religion', rule: 'Religion and faith' },
+  { id: 'health', label: 'Health & fitness', rule: 'Health, fitness, diets and wellness' },
+  { id: 'family', label: 'Family & parenting', rule: 'Family life, kids and parenting' },
+  { id: 'dating', label: 'Dating & relationships', rule: 'Dating, relationships and gender wars' },
+  { id: 'memes', label: 'Memes & jokes', rule: 'Memes, jokes and shitposts' },
+  { id: 'animals', label: 'Animals & pets', rule: 'Animals and pets' },
+  { id: 'lifestyle', label: 'Travel, food & lifestyle', rule: 'Travel, food, fashion and lifestyle' },
+  { id: 'cars', label: 'Cars', rule: 'Cars, EVs and motoring' },
+  { id: 'real_estate', label: 'Real estate', rule: 'Real estate, property and the housing market' },
+  { id: 'science', label: 'Science & space', rule: 'Science, research and space' },
+  { id: 'giveaways', label: 'Giveaways & contests', rule: 'Giveaways, contests and airdrops' },
+  { id: 'events', label: 'Events & webinars', rule: 'Promotion of events, conferences and webinars' },
+];
+export const NO_TOPIC = 'none_of_these';
+
+// Only asked about posts you hide yourself, never while filtering.
+export function topicQuestion() {
+  const criteria = {};
+  for (const t of TOPICS) criteria[t.id] = t.rule;
+  criteria[NO_TOPIC] = 'The post is not mainly about any of these topics';
+  return {
+    type: 'choice',
+    instructions: {
+      question: 'Which topic is `post`, including any post it quotes, mainly about?',
+      focus: 'Pick the subject of the post, not its style or tone. Pick none_of_these when no topic clearly fits.',
+      language: ANY_LANGUAGE,
+    },
+    criteria,
+  };
+}
+
+// Your own hidden and kept posts become examples in a question, so Jev learns
+// where you draw the line. `hide` posts go under the answer that hides a post
+// (for focus, `invert`, that is "not about your interests").
+export function withExamples(question, examples, { invert = false } = {}) {
+  const hide = examples?.hide || [];
+  const keep = examples?.keep || [];
+  if (!hide.length && !keep.length) return question;
+  const instructions =
+    typeof question.instructions === 'string' ? { question: question.instructions } : { ...question.instructions };
+  instructions.user_examples =
+    "Some examples are posts this user hid or kept themselves. They show this user's own line: a post very similar to one of them should get the same answer.";
+  if (question.type === 'score') {
+    const levels = question.criteria.map(asCriterion);
+    levels[levels.length - 2] = addExamples(levels[levels.length - 2], hide);
+    levels[1] = addExamples(levels[1], keep);
+    return { ...question, instructions, criteria: levels };
+  }
+  const [yes, no] = invert ? [keep, hide] : [hide, keep];
+  return {
+    ...question,
+    instructions,
+    criteria: {
+      ...question.criteria,
+      true: addExamples(asCriterion(question.criteria.true), yes),
+      false: addExamples(asCriterion(question.criteria.false), no),
+    },
+  };
+}
+
+function asCriterion(c) {
+  return typeof c === 'string' ? { what: c } : { ...c };
+}
+
+function addExamples(c, texts) {
+  return texts.length ? { ...c, examples: [...(c.examples || []), ...texts] } : c;
+}
+
+// One 0..1 number per answer, as stored with your feedback.
+export function answerValue(answer) {
+  if (answer?.type === 'noul') return answer.noul;
+  if (answer?.type === 'score') return scoreFraction(answer);
+  return undefined;
+}
+
 function noul(answer) {
   return answer && answer.type === 'noul' ? answer.noul : 0;
 }

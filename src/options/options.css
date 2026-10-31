@@ -219,6 +219,46 @@ details[open] summary {
   flex: 1;
 }
 
+.rules li > span:first-child {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.rules li small {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.rules li .btn {
+  flex: none;
+}
+
+.rules li.dim b {
+  color: var(--muted);
+}
+
+a.btn {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.learn-block {
+  display: grid;
+  gap: 8px;
+}
+
+.eye-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  vertical-align: -4px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
 .icon-btn {
   border: 0;
   background: transparent;

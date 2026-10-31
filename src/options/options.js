@@ -1,5 +1,5 @@
 import { loadSettings, saveSettings, getApiKey, setApiKey, DEFAULT_SETTINGS } from '../lib/settings.js';
-import { CATEGORIES, GROUPS, THRESHOLDS, FOCUS_STRENGTH } from '../lib/questions.js';
+import { CATEGORIES, GROUPS, THRESHOLDS, FOCUS_STRENGTH, LEARNING } from '../lib/questions.js';
 import { COUNTRIES, REGIONS, getCountry, getRegion } from '../lib/countries.js';
 
 const $ = (id) => document.getElementById(id);
@@ -63,6 +63,8 @@ $('model').addEventListener('change', () => {
 
 // ── Categories and behaviour ────────────────────────────────────────────────
 
+const categoryInputs = {};
+
 function categoryToggle(cat) {
   const label = document.createElement('label');
   label.className = 'toggle';
@@ -70,6 +72,7 @@ function categoryToggle(cat) {
   label.querySelector('b').textContent = cat.label;
   label.querySelector('small').textContent = cat.description;
   const input = label.querySelector('input');
+  categoryInputs[cat.id] = input;
   input.checked = settings.categories[cat.id] ?? cat.defaultOn;
   input.addEventListener('change', () => {
     settings.categories[cat.id] = input.checked;
@@ -292,6 +295,176 @@ bindToggle('countriesOnLinkedIn', () => settings.countries.onLinkedIn, (v) => (s
 bindToggle('includeRegions', () => settings.countries.includeRegions, (v) => (settings.countries.includeRegions = v));
 renderChips();
 renderCountryList();
+
+// ── Learning from you ───────────────────────────────────────────────────────
+
+const send = (type, payload = {}) => chrome.runtime.sendMessage({ type, ...payload });
+const pct = (v) => `${Math.round(v * 100)}%`;
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+bindToggle('learningEnabled', () => settings.learning.enabled, (v) => (settings.learning.enabled = v));
+bindToggle('hideButton', () => settings.learning.hideButton, (v) => (settings.learning.hideButton = v));
+bindToggle('autoRules', () => settings.learning.autoRules, (v) => (settings.learning.autoRules = v));
+
+const RULE_STATUS = {
+  active: (r) => `On · hid ${plural(r.hits, 'post')}${r.keeps ? ` · you unhid ${r.keeps}` : ''}`,
+  learning: (r) => `Learning · hide ${plural(LEARNING.ruleMinHides - r.hides, 'more post')} like this to turn it on`,
+  suggested: () => 'Suggested · turn it on to start hiding these',
+  paused: (r) => `Paused on its own · you unhid ${r.keeps} of the ${r.hits} posts it hid`,
+  off: () => 'Off',
+};
+
+function row(title, detail, ...controls) {
+  const li = document.createElement('li');
+  const text = document.createElement('span');
+  const b = document.createElement('b');
+  b.textContent = title;
+  const small = document.createElement('small');
+  small.textContent = detail;
+  text.append(b, small);
+  li.append(text, ...controls);
+  return li;
+}
+
+function smallButton(label, onClick, title) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn small';
+  btn.textContent = label;
+  if (title) btn.title = title;
+  btn.addEventListener('click', onClick);
+  return btn;
+}
+
+function removeButton(title, onClick) {
+  const del = document.createElement('button');
+  del.className = 'icon-btn';
+  del.type = 'button';
+  del.title = title;
+  del.textContent = '✕';
+  del.addEventListener('click', onClick);
+  return del;
+}
+
+function ruleSwitch(rule) {
+  const label = document.createElement('label');
+  label.className = 'switch';
+  label.title = rule.status === 'active' ? 'Turn this filter off' : 'Turn this filter on';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = rule.status === 'active';
+  input.addEventListener('change', () => send('learning:rule', { id: rule.id, patch: input.checked ? { on: true } : { off: true } }));
+  label.append(input, document.createElement('span'));
+  return label;
+}
+
+function fill(list, block, items) {
+  $(list).replaceChildren(...items);
+  $(block).hidden = items.length === 0;
+}
+
+async function renderLearning() {
+  const res = await send('learning:get');
+  if (!res?.ok) return;
+  const L = res.result;
+
+  $('learningSummary').textContent = !L.enabled
+    ? 'Learning is off. The posts you hid or unhid yourself stay that way, but nothing else changes.'
+    : L.hidden + L.kept === 0
+      ? 'Nothing learned yet.'
+      : `You hid ${plural(L.hidden, 'post')} yourself and unhid ${L.kept}. Deslop tuned ${plural(L.adjusted.length, 'filter')}, ` +
+        `learned ${plural(L.rules.length, 'new filter')} and shows Jev ${L.examples === 1 ? 'one of your posts' : `${L.examples} of your posts`} as examples.`;
+
+  fill(
+    'suggestions',
+    'suggestionsBlock',
+    L.suggestions.map((s) => {
+      if (s.type === 'enable') {
+        return row(`Turn on ${s.label}?`, `You hid ${plural(s.n, 'post')} that look like this, but the filter is off.`, smallButton('Turn on', () => {
+          settings.categories[s.id] = true;
+          if (categoryInputs[s.id]) categoryInputs[s.id].checked = true;
+          save();
+        }));
+      }
+      if (s.type === 'block') {
+        return row(`Hide everything from ${s.label}?`, `You hid ${plural(s.n, 'post')} from this account yourself.`, smallButton('Hide all', () =>
+          send('learning:author', { key: s.key, label: s.label, block: true }),
+        ));
+      }
+      return row(`Never hide ${s.label}?`, `You unhid ${plural(s.n, 'post')} from this account.`, smallButton('Never hide', () => {
+        settings.allowlist.push(s.account);
+        $('allowlist').value = settings.allowlist.join('\n');
+        save();
+      }));
+    }),
+  );
+
+  fill(
+    'learnedRules',
+    'learnedRulesBlock',
+    L.rules.map((r) => {
+      const li = row(r.label, RULE_STATUS[r.status]?.(r) || r.status, ruleSwitch(r), removeButton('Delete this filter and stop learning it', () => {
+        if (confirm(`Delete the learned filter “${r.label}”? Deslop won't learn it from your hides again.`)) {
+          send('learning:rule', { id: r.id, patch: { deleted: true } });
+        }
+      }));
+      li.title = `Asks Jev: does the post fit “${r.text}”? Learned from ${plural(r.examples.hide, 'post')} you hid${r.examples.keep ? ` and ${r.examples.keep} you unhid` : ''}.`;
+      if (r.status !== 'active') li.classList.add('dim');
+      return li;
+    }),
+  );
+
+  fill(
+    'adjusted',
+    'adjustedBlock',
+    L.adjusted.map((a) => {
+      const effect = a.learned > a.base ? 'so it hides fewer posts' : 'so it hides more posts';
+      const counts = [a.kept && `you unhid ${a.kept}`, a.hidden && `you hid ${a.hidden} it missed`].filter(Boolean).join(' · ');
+      return row(a.label, `Hides at ≥${pct(a.learned)} instead of ${pct(a.base)}, ${effect}${counts ? ` · ${counts}` : ''}`);
+    }),
+  );
+
+  fill(
+    'learnedAuthors',
+    'authorsBlock',
+    L.authors.map((a) =>
+      row(a.label, 'Everything they post is hidden', removeButton('Stop hiding this account', () => send('learning:author', { key: a.key, block: false }))),
+    ),
+  );
+}
+
+$('exportFeedback').addEventListener('click', async () => {
+  const status = $('exportStatus');
+  const res = await send('learning:export');
+  if (!res?.ok) {
+    status.className = 'status err';
+    status.textContent = res?.error || 'Export failed';
+    return;
+  }
+  const bundle = res.result;
+  if (!bundle.feedback.length) {
+    status.className = 'status';
+    status.textContent = 'Nothing to export yet: hide or unhide a few posts first.';
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' }));
+  a.download = `deslop-feedback-${bundle.exported}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+  status.className = 'status ok';
+  status.textContent = `Exported ${plural(bundle.feedback.length, 'post')}. Read the file, then attach it to a new issue with "Share it on GitHub".`;
+});
+
+$('resetLearning').addEventListener('click', async () => {
+  if (!confirm('Forget every post you hid or unhid and everything Deslop learned from them?')) return;
+  await send('learning:reset');
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if ((area === 'local' && changes['learning:v1']) || (area === 'sync' && changes.settings)) renderLearning();
+});
+renderLearning();
 
 // ── Data ────────────────────────────────────────────────────────────────────
 
