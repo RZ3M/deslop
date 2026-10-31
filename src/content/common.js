@@ -287,7 +287,13 @@
 
     function render(el, container, post, decision) {
       clear(container);
-      if (!decision.hide) return;
+      if (!decision.hide || hiddenElsewhere(el)) return;
+      // Ad blockers can hide a post a moment after it appears.
+      setTimeout(() => {
+        if (tracked.get(el) !== post.key || !container.dataset.deslop || !hiddenElsewhere(el)) return;
+        clear(container);
+        tracked.delete(el); // look again if the post comes back
+      }, 1000);
       const ctx = { el, container, post, decision };
       if (decision.revealed) return reveal(ctx);
 
@@ -663,6 +669,20 @@
         .slice(0, 2)
         .map((r) => (r.id === 'country' || r.value >= 1 ? r.label : `${r.label} ${Math.round(r.value * 100)}%`))
         .join(' · ');
+    }
+
+    // True when something other than Deslop (an ad blocker such as uBlock
+    // Origin) already hides or removed the post's content. Such posts get no
+    // bar and aren't counted: there's nothing left for Deslop to hide.
+    // Deslop's own hiding is switched off for the check (deslop-probe in
+    // content.css) without touching the post, so nothing watching it sees a change.
+    function hiddenElsewhere(el) {
+      const root = document.documentElement;
+      root.classList.add('deslop-probe');
+      const body = adapter.content ? adapter.content(el) : el;
+      const gone = !body || !body.getClientRects().length;
+      root.classList.remove('deslop-probe');
+      return gone;
     }
 
     function clear(container) {

@@ -1,6 +1,7 @@
 // Offline end-to-end for the LinkedIn adapter: real background.js + content
 // scripts on a mock feed, with no API key. Checks that hidden posts don't
-// flicker when the page changes, that "Show" keeps a post revealed and "Hide again" collapses it.
+// flicker when the page changes, that "Show" keeps a post revealed and "Hide again" collapses it,
+// and that posts an ad blocker already hides get no placeholder.
 window.__shim.reset();
 
 const person = (slug) => `https://www.linkedin.com/in/${slug}/`;
@@ -22,8 +23,21 @@ const CARDS = [
     header: `<a href="${person('sam-lee')}"><img alt=""></a><a href="${person('sam-lee')}">Sam Lee<br> • 1st</a><p>Staff Engineer at Contoso</p><p>3h •</p>`,
     text: 'Wrote up how we cut p99 latency on our ledger service.<br><br>Happy to answer questions.',
   },
+  // Promoted cards an ad blocker hides the insides of: one before Deslop
+  // sees it, one after Deslop has already collapsed it.
+  {
+    id: 'ublock', slug: 'globex', why: 'hidden by an ad blocker', blocked: true,
+    header: `<a href="https://www.linkedin.com/company/globex/"><img alt=""></a><a href="https://www.linkedin.com/company/globex/">Globex</a><p>Promoted</p>`,
+    text: 'Globex Analytics: dashboards your CFO will actually read.',
+  },
+  {
+    id: 'late', slug: 'initech', why: 'hidden by an ad blocker later', blocked: true,
+    header: `<a href="https://www.linkedin.com/company/initech/"><img alt=""></a><a href="https://www.linkedin.com/company/initech/">Initech</a><p>Promoted</p>`,
+    text: 'Initech TPS: reports, but faster.',
+  },
 ];
-const HIDDEN = CARDS.filter((c) => c.id !== 'plain');
+const HIDDEN = CARDS.filter((c) => c.id !== 'plain' && !c.blocked);
+const BLOCKED = CARDS.filter((c) => c.blocked);
 
 const feed = document.getElementById('feed');
 const report = document.getElementById('report');
@@ -47,6 +61,9 @@ function loadScript(src) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Hides a card's insides the way an ad blocker's cosmetic filter does.
+const adBlock = (id) => (document.head.appendChild(document.createElement('style')).textContent = `[data-card="${id}"] > div { display: none !important; }`);
+adBlock('ublock');
 const card = (id) => feed.querySelector(`[data-card="${id}"]`);
 const state = (id) => card(id).dataset.deslop || 'shown';
 
@@ -92,8 +109,14 @@ await loadScript('../src/content/common.js');
 await loadScript('../src/content/linkedin.js');
 log('Content scripts injected.\n\nCollapse mode');
 
-await waitUntil(() => HIDDEN.every((c) => state(c.id) === 'collapsed'));
-for (const c of CARDS) check(state(c.id) === (c.id === 'plain' ? 'shown' : 'collapsed'), `${c.id.padEnd(6)} ${state(c.id).padEnd(9)} (${c.why})`);
+await waitUntil(() => HIDDEN.every((c) => state(c.id) === 'collapsed') && state('late') === 'collapsed');
+adBlock('late');
+await sleep(1500);
+for (const c of CARDS) {
+  const want = c.id === 'plain' || c.blocked ? 'shown' : 'collapsed';
+  check(state(c.id) === want, `${c.id.padEnd(6)} ${state(c.id).padEnd(9)} (${c.why})`);
+}
+for (const c of BLOCKED) check(!card(c.id).querySelector('.deslop-bar'), `${c.id.padEnd(6)} has no Deslop bar (${c.why})`);
 
 let changes = await changesDuring();
 for (const c of CARDS) check(changes[c.id] === 0, `${c.id.padEnd(6)} stays put while the page changes (${changes[c.id]} changes)`);
@@ -111,6 +134,7 @@ log('\nRemove mode');
 await chrome.storage.sync.set({ settings: { hideMode: 'remove', hidePromoted: true, mutedWords: ['crypto'] } });
 await waitUntil(() => HIDDEN.every((c) => state(c.id) === 'hidden'));
 for (const c of HIDDEN) check(state(c.id) === 'hidden', `${c.id.padEnd(6)} ${state(c.id)} (${c.why})`);
+for (const c of BLOCKED) check(state(c.id) === 'shown', `${c.id.padEnd(6)} left to the ad blocker (${state(c.id)})`);
 
 changes = await changesDuring();
 for (const c of CARDS) check(changes[c.id] === 0, `${c.id.padEnd(6)} stays put while the page changes (${changes[c.id]} changes)`);
@@ -120,6 +144,8 @@ for (const c of HIDDEN) {
   const n = recent.filter((r) => r.handle === c.slug).length;
   check(n === 1, `${c.id.padEnd(6)} counted as hidden once (${n})`);
 }
+const blockedCount = recent.filter((r) => r.handle === 'globex').length;
+check(blockedCount === 0, `ublock not counted as hidden (${blockedCount})`);
 
 report.textContent = `${pass}/${total} checks passed\n` + report.textContent;
 window.e2e = { passed: pass, total, report: report.textContent };
