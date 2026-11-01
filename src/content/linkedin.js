@@ -154,6 +154,7 @@
     container: (card) => card,
     // Ad blockers hide a promoted card's insides, not the card itself.
     content: (card) => card.querySelector(TEXT_BOX),
+    body: (card) => card.querySelector(TEXT_BOX), // where the post's text starts, below its header
     skip: () => false,
     placeKey: (post) => (post.author?.kind === 'person' ? post.author.slug?.toLowerCase() : null),
     lookupPlace,

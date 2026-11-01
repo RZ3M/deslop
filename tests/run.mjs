@@ -2,7 +2,7 @@
 // failure. No dependencies: a small static server (the same routes as
 // scripts/serve.ps1) plus the Chrome DevTools Protocol over Node's WebSocket.
 //
-//   node tests/run.mjs           offline tests (unit + mock X and LinkedIn feeds)
+//   node tests/run.mjs           offline tests (unit + mock X and LinkedIn feeds + learning)
 //   node tests/run.mjs --live    also the tests that call Jev; needs
 //                                config.local.json or OPENROUTER_API_KEY
 //
@@ -22,6 +22,7 @@ const PAGES = [
   { path: 'tests/unit.html', result: 'window.unitResults' },
   { path: 'tests/e2e-x-offline.html', result: 'window.e2e' },
   { path: 'tests/e2e-linkedin-offline.html', result: 'window.e2e' },
+  { path: 'tests/e2e-learning-offline.html', result: 'window.e2e' },
   ...(LIVE
     ? [
         { path: 'tests/e2e-x.html', result: 'window.e2e' },

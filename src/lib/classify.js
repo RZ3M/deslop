@@ -1,7 +1,17 @@
 // Turns an extracted post into a Jev request, and Jev's answers into a verdict.
 // Pure functions only (no chrome.* APIs) so the test harness can import them.
 
-import { QUESTIONS, CATEGORIES, THRESHOLDS, FOCUS_STRENGTH, customRuleQuestion, focusQuestion } from './questions.js';
+import {
+  QUESTIONS,
+  CATEGORIES,
+  THRESHOLDS,
+  FOCUS_STRENGTH,
+  LEARNING,
+  customRuleQuestion,
+  focusQuestion,
+  topicQuestion,
+  withExamples,
+} from './questions.js';
 
 const PLATFORM_NAMES = { x: 'X (Twitter)', linkedin: 'LinkedIn' };
 const MAX_TEXT = 4000;
@@ -33,6 +43,18 @@ export function customRuleId(rule) {
   return `custom_${fnv1a(rule)}`;
 }
 
+// Filters learned from posts you hid (see learn.js), keyed the same way.
+export function learnedRuleId(rule) {
+  return `learned_${fnv1a(rule)}`;
+}
+
+// The account a post is from, as `platform:@handle` (X) or `platform:slug`
+// (LinkedIn), for authors you hide everything from or never hide.
+export function authorKey(platform, author) {
+  const id = author?.handle || author?.slug;
+  return id ? `${platform}:${id.toLowerCase()}` : null;
+}
+
 export function isCategoryEnabled(settings, cat) {
   return settings.categories?.[cat.id] ?? cat.defaultOn;
 }
@@ -55,14 +77,39 @@ export function buildQuestions(customRules = []) {
 }
 
 // Only the questions the current settings need. Disabled categories cost nothing.
-export function questionsFor(settings, platform) {
+// `model` is what Deslop learned from your feedback (learn.js): your examples
+// are added to the questions, and filters it learned are asked too.
+export function questionsFor(settings, platform, model) {
+  const ex = model?.examples || {};
   const questions = {};
   for (const cat of CATEGORIES) {
     if (!isCategoryEnabled(settings, cat)) continue;
-    for (const id of cat.questions) questions[id] = QUESTIONS[id];
+    for (const id of cat.questions) questions[id] = withExamples(QUESTIONS[id], ex[id]);
   }
-  for (const rule of settings.customRules || []) questions[customRuleId(rule)] = customRuleQuestion(rule);
-  if (focusActive(settings, platform)) questions.focus = focusQuestion(settings.focus.interests);
+  for (const rule of settings.customRules || []) {
+    const id = customRuleId(rule);
+    questions[id] = withExamples(customRuleQuestion(rule), ex[id]);
+  }
+  for (const rule of model?.rules || []) {
+    if (rule.active) questions[rule.id] = withExamples(customRuleQuestion(rule.text), ex[rule.id]);
+  }
+  if (focusActive(settings, platform)) {
+    questions.focus = withExamples(focusQuestion(settings.focus.interests), ex.focus, { invert: true });
+  }
+  return questions;
+}
+
+// For a post you hid yourself: every question Deslop can ask, including
+// categories you have off and filters still being learned, plus the post's
+// topic, so it can work out why you hid it (learn.js).
+export function analysisQuestions(settings, platform, model) {
+  const ex = model?.examples || {};
+  const questions = questionsFor(settings, platform, model);
+  for (const [id, q] of Object.entries(QUESTIONS)) questions[id] ||= withExamples(q, ex[id]);
+  for (const rule of model?.rules || []) {
+    if (rule.status !== 'off') questions[rule.id] ||= withExamples(customRuleQuestion(rule.text), ex[rule.id]);
+  }
+  questions.topic = topicQuestion();
   return questions;
 }
 
@@ -95,34 +142,51 @@ export function localSignals(post) {
   return { fancy_fonts: fancyFontScore(post) };
 }
 
-export function verdictFrom(answers, settings, platform, local = {}) {
+// `model.thresholds` holds thresholds learned from your feedback; anything
+// you haven't corrected uses the strictness threshold.
+export function verdictFrom(answers, settings, platform, local = {}, model) {
   const strictness = THRESHOLDS[settings.strictness] ? settings.strictness : 'balanced';
   const t = THRESHOLDS[strictness];
+  const learned = model?.thresholds || {};
   const signals = [];
 
   for (const cat of CATEGORIES) {
     const value = cat.value(answers, local);
-    const threshold = t[cat.id] ?? t.default;
+    const threshold = learned[cat.id] ?? t[cat.id] ?? t.default;
     const enabled = isCategoryEnabled(settings, cat);
     signals.push({ id: cat.id, label: cat.label, value, threshold, enabled, hit: enabled && value >= threshold });
   }
 
-  for (const rule of settings.customRules || []) {
-    const id = customRuleId(rule);
+  const rules = [
+    ...(settings.customRules || []).map((rule) => ({ id: customRuleId(rule), label: rule })),
+    ...(model?.rules || []).filter((r) => r.active).map((r) => ({ id: r.id, label: r.label })),
+  ];
+  for (const { id, label } of rules) {
     const a = answers[id];
     const value = a && a.type === 'noul' ? a.noul : 0;
-    signals.push({ id, label: rule, value, threshold: t.custom, enabled: true, hit: value >= t.custom });
+    const threshold = learned[id] ?? t.custom;
+    signals.push({ id, label, value, threshold, enabled: true, hit: value >= threshold });
   }
 
   if (focusActive(settings, platform)) {
     const a = answers.focus;
     const value = a && a.type === 'noul' ? 1 - a.noul : 0;
-    const threshold = FOCUS_STRENGTH[settings.focus.strength] ?? FOCUS_STRENGTH.balanced;
+    const threshold = learned.off_topic ?? FOCUS_STRENGTH[settings.focus.strength] ?? FOCUS_STRENGTH.balanced;
     signals.push({ id: 'off_topic', label: 'Outside your focus', value, threshold, enabled: true, hit: value >= threshold });
   }
 
   const reasons = signals.filter((s) => s.hit).sort((a, b) => b.value - a.value);
   return { hide: reasons.length > 0, reasons, signals };
+}
+
+// A post as an example for Jev: plain letters, short, and the quoted post when
+// the post itself is only a reaction to it.
+export function exampleText(post, max = LEARNING.exampleChars) {
+  const tidy = (t) => unstyle(t || '').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
+  let text = tidy(post?.text);
+  const quoted = tidy(post?.quoted?.text);
+  if (quoted && text.length < 80) text = text ? `${text} [quoting: ${quoted}]` : quoted;
+  return clip(text, max);
 }
 
 // Word counting that works for languages written without spaces (Chinese,
