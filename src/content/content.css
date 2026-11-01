@@ -49,12 +49,37 @@ html:not(.deslop-probe) [data-deslop='collapsed'] > :not(.deslop-bar) {
    that background (LinkedIn's "…more" button) can take the same layer. */
 [data-deslop='revealed'] {
   --deslop-tint: linear-gradient(rgba(255, 204, 77, 0.1), rgba(255, 204, 77, 0.1));
-  box-shadow: inset 4px 0 0 #ffcc4d;
+  position: relative;
   background-image: var(--deslop-tint) !important;
 }
 
-[data-deslop='revealed'] [data-testid='expandable-text-button'] {
+/* Not in comments: they keep their own background in dark themes. */
+[data-deslop='revealed'] [data-testid='expandable-text-button']:not([data-testid*='commentList'] *) {
   background-image: var(--deslop-tint) !important;
+}
+
+/* Parts of the post with their own opaque background (LinkedIn's comments)
+   would cover the edge and tint, so both are also painted above the post's
+   contents. The edge is plain; the tint uses "darken", which turns white into
+   the same cream as the tinted post and leaves text, images and dark themes
+   alone (there the background tint above still applies). */
+[data-deslop='revealed']::before,
+[data-deslop='revealed']::after {
+  content: '' !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1; /* above positioned children too, which ::before precedes */
+  border-radius: inherit;
+  pointer-events: none !important;
+}
+
+[data-deslop='revealed']::before {
+  box-shadow: inset 4px 0 0 #ffcc4d;
+}
+
+[data-deslop='revealed']::after {
+  background: rgb(255, 250, 237);
+  mix-blend-mode: darken;
 }
 
 [data-deslop='revealed'] > .deslop-bar {
