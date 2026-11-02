@@ -50,18 +50,26 @@ $('openOptions').addEventListener('click', () => chrome.runtime.openOptionsPage(
 async function renderStats() {
   const res = await chrome.runtime.sendMessage({ type: 'stats:get' });
   if (!res?.ok) return;
-  const { stats, recent, lastError, ready, cached } = res.result;
+  const { stats, recent, lastError, ready, cap, cached } = res.result;
 
   $('hiddenToday').textContent = stats.hiddenToday;
   $('checksToday').textContent = stats.checksToday;
   $('spendToday').textContent = formatUsd(stats.spendToday);
+  $('spendLabel').textContent = cap ? `of ${formatUsd(cap)}` : 'spent';
   $('cacheInfo').textContent = `${cached.posts} posts · ${cached.accounts} accounts cached`;
 
   const notice = $('notice');
   if (!ready) {
     notice.hidden = false;
-    notice.innerHTML = 'Add an OpenRouter API key or your own server to start filtering. <a href="#" id="setKey">Open settings</a>';
+    notice.innerHTML = 'Connect OpenRouter or set up your own server to start filtering. <a href="#" id="setKey">Open settings</a>';
     $('setKey').addEventListener('click', (e) => {
+      e.preventDefault();
+      chrome.runtime.openOptionsPage();
+    });
+  } else if (cap && stats.spendToday >= cap) {
+    notice.hidden = false;
+    notice.innerHTML = `Today's ${formatUsd(cap)} spending cap is reached, so new posts aren't checked until midnight. <a href="#" id="setCap">Change the cap</a>`;
+    $('setCap').addEventListener('click', (e) => {
       e.preventDefault();
       chrome.runtime.openOptionsPage();
     });

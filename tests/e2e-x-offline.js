@@ -128,5 +128,35 @@ check(!document.documentElement.classList.contains('deslop-ghost-menu'), 'menus 
 const recent = (await chrome.runtime.sendMessage({ type: 'stats:get' })).result.recent;
 log(`\nRecent: ${recent.map((r) => `${r.handle}→${r.reasons[0]?.label}`).join(', ')}`);
 
+// Daily spending cap: once today's OpenRouter spend reaches it, posts aren't sent.
+log('');
+const modelCalls = [];
+const realFetch = window.fetch;
+window.fetch = async (url, init) => {
+  if (String(url).startsWith('https://openrouter.ai/api/alpha/decisions')) {
+    modelCalls.push(url);
+    return new Response(JSON.stringify({ model: 'stub', answers: {}, usage: { cost: 0.0001 } }));
+  }
+  return realFetch(url, init);
+};
+const capPost = (n) => ({
+  platform: 'x',
+  key: `cap-${n}`,
+  author: { name: 'Cap Test', handle: '@captest' },
+  text: 'A long enough post about quarterly planning, hiring and roadmaps so that it would normally be checked.',
+});
+const { settings: saved } = await chrome.storage.sync.get('settings');
+await chrome.storage.local.set({ apiKey: 'sk-or-test' });
+const stats = (await chrome.runtime.sendMessage({ type: 'stats:get' })).result.stats;
+await chrome.storage.local.set({ stats: { ...stats, spendToday: 0.6 } });
+const capped = (await chrome.runtime.sendMessage({ type: 'classify', post: capPost(1) })).result;
+check(capped.skipped === 'cap-reached' && modelCalls.length === 0, `over the default $0.50 cap: skipped "${capped.skipped}", ${modelCalls.length} model calls`);
+const capInfo = (await chrome.runtime.sendMessage({ type: 'stats:get' })).result.cap;
+check(capInfo === 0.5, `popup is told the cap is $${capInfo}`);
+await chrome.storage.sync.set({ settings: { ...saved, spendCap: { enabled: false, daily: 0.5 } } });
+const uncapped = (await chrome.runtime.sendMessage({ type: 'classify', post: capPost(2) })).result;
+check(uncapped.skipped !== 'cap-reached' && modelCalls.length === 1, `cap turned off: post sent to the model (${modelCalls.length} call)`);
+window.fetch = realFetch;
+
 report.textContent = `${pass}/${total} checks passed\n` + report.textContent;
 window.e2e = { passed: pass, total, report: report.textContent };

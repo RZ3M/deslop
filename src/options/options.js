@@ -1,5 +1,6 @@
 import { loadSettings, saveSettings, getApiKey, setApiKey, getServerKey, setServerKey, DEFAULT_SETTINGS } from '../lib/settings.js';
 import { DEFAULT_MODEL, DEFAULT_SERVER_MODEL, listOpenRouterModels, systemOneUrl, originPattern } from '../lib/jev.js';
+import { connectOpenRouter } from '../lib/connect.js';
 import { CATEGORIES, GROUPS, THRESHOLDS, FOCUS_STRENGTH } from '../lib/questions.js';
 import { COUNTRIES, REGIONS, getCountry, getRegion } from '../lib/countries.js';
 
@@ -165,17 +166,59 @@ $('testModel').addEventListener('click', async () => {
     if (!granted) return setStatus(`Deslop needs your permission to reach ${new URL(endpoint).host}.`, 'err');
   }
 
-  setStatus('Testing…');
+  await saveAndTest();
+});
+
+async function saveAndTest(prefix = '') {
+  setStatus(`${prefix}Testing…`);
   clearTimeout(saveTimer);
   await Promise.all([saveSettings(settings), setApiKey($('apiKey').value), setServerKey($('serverKey').value)]);
   const res = await chrome.runtime.sendMessage({ type: 'model:test', settings });
   if (res?.ok) {
     const { model, ms, bait } = res.result;
-    setStatus(`Connected to ${model} in ${ms} ms. Test post scored ${Math.round(bait * 100)}% engagement bait.`, 'ok');
+    setStatus(`${prefix}Connected to ${model} in ${ms} ms. Test post scored ${Math.round(bait * 100)}% engagement bait.`, 'ok');
   } else {
-    setStatus(res?.error || 'Test failed', 'err');
+    setStatus(`${prefix}${res?.error || 'Test failed'}`, 'err');
   }
+}
+
+$('connect').addEventListener('click', async () => {
+  setStatus('Waiting for OpenRouter…');
+  try {
+    $('apiKey').value = await connectOpenRouter();
+  } catch (err) {
+    return setStatus(err.message, 'err');
+  }
+  await saveAndTest('OpenRouter connected. ');
 });
+
+// ── Spending cap ────────────────────────────────────────────────────────────
+
+$('capAmount').value = settings.spendCap.daily.toFixed(2);
+
+function renderCap() {
+  const { enabled, daily } = settings.spendCap;
+  $('capEnabled').checked = enabled;
+  $('capAmount').disabled = !enabled;
+  // ≈2,300 tokens per post at Jev's $0.042/M (README "Cost").
+  const posts = Math.round(daily / 0.0001);
+  $('capHelp').textContent = enabled
+    ? `About ${posts.toLocaleString()} posts a day with Jev and the default filters. It can go over by a fraction of a cent while the last few posts finish.`
+    : 'No cap: Deslop checks every post, however much that costs.';
+}
+$('capEnabled').addEventListener('change', () => {
+  settings.spendCap.enabled = $('capEnabled').checked;
+  renderCap();
+  save();
+});
+$('capAmount').addEventListener('change', () => {
+  const value = Number($('capAmount').value);
+  if (Number.isFinite(value) && value > 0) settings.spendCap.daily = Math.round(value * 100) / 100;
+  $('capAmount').value = settings.spendCap.daily.toFixed(2);
+  renderCap();
+  save();
+});
+renderCap();
 
 // Saved before this version, or the permission was removed in chrome://extensions.
 if (settings.provider === 'server' && settings.server.url) {

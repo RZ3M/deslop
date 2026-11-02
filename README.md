@@ -116,6 +116,8 @@ Raw answers are cached per post and per question for 14 days. Changing strictnes
 
 **Cost:** about **$0.0001 per post** with the original seven questions (≈2,300 input tokens at $0.042/M). Each extra filter you turn on adds one short question to the same request, so cost grows a little with every filter, and filters that are off cost nothing. Today's spend is shown in the popup.
 
+**Spending cap:** Deslop stops sending posts to OpenRouter for the rest of the day once today's spend reaches your cap, **$0.50 by default** (about 5,000 posts with Jev). Change it or turn it off under **Model** in settings. The day resets at your local midnight. Muted words, promoted posts and fancy fonts mixed with emojis are still hidden, because they're decided in code. The cap can be overshot by a fraction of a cent while the last few requests finish. Self-hosted servers have no cap, since they're free.
+
 ### Choosing a model
 
 The **Model** card in settings has two options:
@@ -139,7 +141,7 @@ Answers are cached separately for each model, so switching models never mixes th
 1. Download `deslop-<version>.zip` from the [latest release](https://github.com/RZ3M/deslop/releases/latest) and unzip it, or clone this repo. For the newest build of `main`, rebuilt on every merge, get [`deslop-edge.zip`](https://github.com/RZ3M/deslop/releases/download/edge/deslop-edge.zip).
 2. Open `chrome://extensions` and switch on **Developer mode** (top right).
 3. Click **Load unpacked** and select the folder that contains `manifest.json`.
-4. The settings page opens. Paste an [OpenRouter API key](https://openrouter.ai/settings/keys) and click **Save & test**, or switch to **Your own server** (see [Choosing a model](#choosing-a-model)).
+4. The settings page opens. Click **Connect OpenRouter**, sign in to OpenRouter and click **Authorize**: OpenRouter creates a key named "Deslop" for the extension (you can give it a credit limit on that page). Or paste an [API key](https://openrouter.ai/settings/keys) you already have and click **Save & test**, or switch to **Your own server** (see [Choosing a model](#choosing-a-model)).
 5. Scroll X or LinkedIn.
 
 Works in Chrome, Edge, Brave, Arc and other Chromium browsers (Manifest V3, Chrome 111+).
@@ -158,6 +160,8 @@ This writes `config.local.json` (gitignored). The unpacked extension imports it 
 
 ## Privacy
 
+The full policy is in [PRIVACY.md](PRIVACY.md). In short:
+
 - **Post text goes to OpenRouter and the model's maker** (or only to your own server, if you use one) to be classified: the author's display name and handle or headline, the post text, any quoted post, and whether it has media. Nothing else from the page is sent.
 - Your **API keys** stay in `chrome.storage.local`. The OpenRouter key is only sent to `openrouter.ai`, and a server key only to your server.
 - Deslop only asks for access to your own server's host when you click **Save & test**, and only for that host.
@@ -175,6 +179,7 @@ src/
   lib/questions.js       ★ every Jev question and threshold, in one place
   lib/classify.js        post → Jev state, answers → verdict (pure, testable)
   lib/jev.js             Decision model client: OpenRouter or a System One server (retries, concurrency limit, model list)
+  lib/connect.js         Connect OpenRouter (OAuth PKCE: creates a key in the user's account)
   lib/countries.js       countries, regions, place matching
   lib/settings.js, cache.js
   content/common.js      engine: scan, blur, hide/collapse, country check

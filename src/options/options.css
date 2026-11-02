@@ -145,6 +145,32 @@ select:focus {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+.cap {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.cap-amount {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.cap-amount input {
+  width: 110px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.cap-amount input:disabled {
+  opacity: 0.5;
+}
+
 .status {
   font-size: 13px;
   min-height: 1em;

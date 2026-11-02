@@ -27,10 +27,14 @@
       </div>
 
       <div id="openrouterPanel" class="panel">
-        <p class="muted">Your key is stored only in this browser (<code>chrome.storage.local</code>) and sent only to openrouter.ai.
-          <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">Get a key</a></p>
+        <p class="muted">Connect your OpenRouter account and Deslop gets a key of its own, named "Deslop", which you can see or revoke in your
+          <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">OpenRouter keys</a>. OpenRouter's page also lets you give that key a credit limit. Or paste a key you already have.
+          The key is stored only in this browser and sent only to openrouter.ai.</p>
         <div class="key-row">
-          <input type="password" id="apiKey" placeholder="sk-or-v1-…" autocomplete="off" spellcheck="false" aria-label="OpenRouter API key">
+          <button class="btn primary" id="connect" type="button">Connect OpenRouter</button>
+        </div>
+        <div class="key-row">
+          <input type="password" id="apiKey" placeholder="or paste a key: sk-or-v1-…" autocomplete="off" spellcheck="false" aria-label="OpenRouter API key">
           <button class="btn" type="button" data-reveal="apiKey">Show</button>
         </div>
         <label class="field">Decision model
@@ -38,6 +42,14 @@
         </label>
         <input type="text" id="modelOther" placeholder="maker/model-id" spellcheck="false" aria-label="OpenRouter model ID" hidden>
         <p class="muted small" id="modelHelp"></p>
+        <div class="cap">
+          <label class="toggle">
+            <span class="switch"><input type="checkbox" id="capEnabled"><span></span></span>
+            <span><b>Daily spending cap</b><small>Once today's OpenRouter spend reaches this, Deslop stops checking posts until midnight. Muted words, promoted posts and countries already looked up still work.</small></span>
+          </label>
+          <label class="cap-amount">$ <input type="number" id="capAmount" min="0.01" step="0.05" inputmode="decimal" aria-label="Daily spending cap in US dollars"> per day</label>
+          <p class="muted small" id="capHelp"></p>
+        </div>
       </div>
 
       <div id="serverPanel" class="panel" hidden>
@@ -61,7 +73,7 @@
       </div>
 
       <div class="key-row">
-        <button class="btn primary" id="testModel" type="button">Save &amp; test</button>
+        <button class="btn" id="testModel" type="button">Save &amp; test</button>
       </div>
       <p id="testStatus" class="status" aria-live="polite"></p>
     </section>
@@ -191,6 +203,8 @@
     <section class="card">
       <h2>Data</h2>
       <p class="muted" id="dataInfo"></p>
+      <p class="muted small">Everything above is stored only in your browser. Deslop has no server and no analytics.
+        <a href="https://github.com/RZ3M/deslop/blob/main/PRIVACY.md" target="_blank" rel="noopener">Privacy policy</a></p>
       <div class="add-row">
         <button class="btn" id="clearCache" type="button">Clear cached verdicts</button>
         <button class="btn" id="resetSettings" type="button">Reset settings</button>
