@@ -4,7 +4,7 @@
 
 <p align="center"><b>A Chrome extension that removes slop from X and LinkedIn.</b><br>
 Engagement bait, AI-written filler, hate and abuse, recycled news, clickbait hooks, broetry and, if you want, off-topic posts or posts from countries you choose, quietly disappear from your feed, in any language.<br>
-Every post is judged by <a href="https://openrouter.ai/~typesafe/jev-latest">Jev</a>, TypeSafe's decision model, through OpenRouter.</p>
+Every post is judged by <a href="https://openrouter.ai/~typesafe/jev-latest">Jev</a>, TypeSafe's decision model, through OpenRouter, or by another decision model you pick or host yourself.</p>
 
 <p align="center">
   <img src="docs/timeline.png" width="420" alt="An X timeline with two slop posts replaced by Deslop placeholders and one revealed post with a Hide again button">
@@ -116,6 +116,17 @@ Raw answers are cached per post and per question for 14 days. Changing strictnes
 
 **Cost:** about **$0.0001 per post** with the original seven questions (≈2,300 input tokens at $0.042/M). Each extra filter you turn on adds one short question to the same request, so cost grows a little with every filter, and filters that are off cost nothing. Today's spend is shown in the popup.
 
+### Choosing a model
+
+The **Model** card in settings has two options:
+
+- **OpenRouter** (default). Pick any of OpenRouter's decision models from the list, which is loaded live, so new models appear without an update. Each one shows its approximate price per 1,000 posts. Jev Latest is recommended, because Deslop's questions and strictness levels are tuned for it. Models that need their own input format (ScaleDown, Respan) and retired models aren't listed. For anything else, pick **Other model ID…** and type it.
+- **Your own server.** Any server that speaks the System One API (`POST /v1/systemone`), such as [Laya](https://pypi.org/project/laya/) (`pip install "laya[serve]"`, then `laya-serve`, which listens on port 8000), Unsloth Studio (Settings → API → Decision API), LocalAI, Ollama 0.35+ or SGLang. Enter the address (`localhost:8000` is enough: `/v1/systemone` is added for you), the model name and, if the server needs one, an API key. **Save & test** asks Chrome for permission to reach that host, and nothing is sent anywhere else. Self-hosted models are free, so spend shows $0.
+
+Answers are cached separately for each model, so switching models never mixes their verdicts.
+
+⚠️ **Self-hosted models are much weaker than Jev on Deslop's questions.** In our tests, Laya's answers barely separated slop from normal posts: at Relaxed and Balanced it hid none of the 30 slop fixtures, and at Strict it also hid 23 of the 24 normal ones. It also took 1.5–3.5 s per post on a Mac, close to the 4 s limit on how long Deslop blurs a post, so with several posts waiting some may show for a moment before they're hidden. The integration works; the model just isn't decisive enough on these questions yet.
+
 ### Country filter
 
 - **X** shows an *"Account based in"* line on every account's *About this account* page. Deslop reads the same data x.com loads for that page, from your logged-in tab, once per account (cached for 45 days). X allows roughly 50 of these lookups per 15 minutes; Deslop respects the rate-limit headers, so a brand-new feed fills in gradually. Some accounts only disclose a region (e.g. "North America"). Enable *Also hide region-only accounts* to hide those when the region contains a country you blocked.
@@ -128,7 +139,7 @@ Raw answers are cached per post and per question for 14 days. Changing strictnes
 1. Download `deslop-<version>.zip` from the [latest release](https://github.com/RZ3M/deslop/releases/latest) and unzip it, or clone this repo. For the newest build of `main`, rebuilt on every merge, get [`deslop-edge.zip`](https://github.com/RZ3M/deslop/releases/download/edge/deslop-edge.zip).
 2. Open `chrome://extensions` and switch on **Developer mode** (top right).
 3. Click **Load unpacked** and select the folder that contains `manifest.json`.
-4. The settings page opens. Paste an [OpenRouter API key](https://openrouter.ai/settings/keys) and click **Save & test**.
+4. The settings page opens. Paste an [OpenRouter API key](https://openrouter.ai/settings/keys) and click **Save & test**, or switch to **Your own server** (see [Choosing a model](#choosing-a-model)).
 5. Scroll X or LinkedIn.
 
 Works in Chrome, Edge, Brave, Arc and other Chromium browsers (Manifest V3, Chrome 111+).
@@ -147,8 +158,9 @@ This writes `config.local.json` (gitignored). The unpacked extension imports it 
 
 ## Privacy
 
-- **Post text goes to OpenRouter/TypeSafe** to be classified: the author's display name and handle or headline, the post text, any quoted post, and whether it has media. Nothing else from the page is sent.
-- Your **API key** stays in `chrome.storage.local` and is only sent to `openrouter.ai`.
+- **Post text goes to OpenRouter and the model's maker** (or only to your own server, if you use one) to be classified: the author's display name and handle or headline, the post text, any quoted post, and whether it has media. Nothing else from the page is sent.
+- Your **API keys** stay in `chrome.storage.local`. The OpenRouter key is only sent to `openrouter.ai`, and a server key only to your server.
+- Deslop only asks for access to your own server's host when you click **Save & test**, and only for that host.
 - Verdicts, account locations and stats are stored **locally** in your browser. There's no Deslop server, analytics or telemetry.
 - Country lookups use your own logged-in X/LinkedIn session from the tab you're browsing, just like opening the About or profile page yourself (see the LinkedIn profile-view note above).
 
@@ -162,7 +174,7 @@ src/
   background.js          service worker: classification, caching, country resolution, stats
   lib/questions.js       ★ every Jev question and threshold, in one place
   lib/classify.js        post → Jev state, answers → verdict (pure, testable)
-  lib/jev.js             OpenRouter Decisions API client (retries, concurrency limit)
+  lib/jev.js             Decision model client: OpenRouter or a System One server (retries, concurrency limit, model list)
   lib/countries.js       countries, regions, place matching
   lib/settings.js, cache.js
   content/common.js      engine: scan, blur, hide/collapse, country check
@@ -222,7 +234,7 @@ If Deslop is too aggressive or too lenient on your feed, edit the wording, examp
 - X and LinkedIn change their markup often. The adapters rely on `data-testid`s, roles and profile URLs rather than CSS classes, but a redesign can still break them.
 - X occasionally rotates the id of its `AboutAccountQuery`. Deslop learns the new one when you open any account's *About* page.
 - Windows doesn't render flag emoji, so countries show as two-letter codes there.
-- Text-only: images and videos aren't analysed (Jev is a text model). Posts with fewer than three words (counting a quoted post) are left alone, even in Focus mode.
+- Text-only: images and videos aren't analysed. Posts with fewer than three words (counting a quoted post) are left alone, even in Focus mode.
 - "Not interested" feedback relies on X's menu wording. If X renames the item, Deslop clicks nothing rather than guessing.
 
 ## License

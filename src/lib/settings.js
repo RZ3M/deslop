@@ -1,8 +1,8 @@
 // User settings live in chrome.storage.sync (small, follows the user across
-// browsers). The API key lives in chrome.storage.local and is never synced.
+// browsers). API keys live in chrome.storage.local and are never synced.
 
 import { CATEGORIES } from './questions.js';
-import { DEFAULT_MODEL } from './jev.js';
+import { DEFAULT_MODEL, DEFAULT_SERVER_MODEL, resolveBackend } from './jev.js';
 
 export const DEFAULT_SETTINGS = {
   enabled: true,
@@ -29,7 +29,9 @@ export const DEFAULT_SETTINGS = {
     onX: true,
     onLinkedIn: true,
   },
-  model: DEFAULT_MODEL,
+  provider: 'openrouter', // openrouter | server (self-hosted, System One API)
+  model: DEFAULT_MODEL, // OpenRouter model
+  server: { url: '', model: DEFAULT_SERVER_MODEL },
 };
 
 export async function loadSettings() {
@@ -48,6 +50,23 @@ export async function getApiKey() {
 
 export async function setApiKey(apiKey) {
   await chrome.storage.local.set({ apiKey: apiKey.trim() });
+}
+
+// Optional key for a self-hosted server, kept apart from the OpenRouter key so
+// switching between them loses neither.
+export async function getServerKey() {
+  const { serverKey } = await chrome.storage.local.get('serverKey');
+  return serverKey || '';
+}
+
+export async function setServerKey(serverKey) {
+  await chrome.storage.local.set({ serverKey: serverKey.trim() });
+}
+
+// Where model requests go for these settings, or null if not set up yet.
+export async function getBackend(settings) {
+  const [apiKey, serverKey] = await Promise.all([getApiKey(), getServerKey()]);
+  return resolveBackend(settings, { apiKey, serverKey });
 }
 
 function mergeDeep(base, patch) {

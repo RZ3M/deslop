@@ -48,9 +48,9 @@
   async function demoResponse(msg) {
     if (msg.type === 'stats:get') {
       const { apiKey } = await area('local').get('apiKey');
-      return { ok: true, result: { ...demo, lastError: null, hasKey: Boolean(apiKey), cached: { posts: 1843, accounts: 322 } } };
+      return { ok: true, result: { ...demo, lastError: null, ready: Boolean(apiKey), cached: { posts: 1843, accounts: 322 } } };
     }
-    if (msg.type === 'key:test') return { ok: true, result: { model: 'typesafe/jev-1.13-20260917', ms: 412, bait: 0.97 } };
+    if (msg.type === 'model:test') return { ok: true, result: { model: 'typesafe/jev-1.13-20260917', ms: 412, bait: 0.97 } };
     return { ok: true, result: {} };
   }
 
@@ -70,6 +70,10 @@
   }
 
   window.chrome = {
+    permissions: {
+      request: async () => true,
+      contains: async () => true,
+    },
     storage: {
       sync: area('sync'),
       local: area('local'),

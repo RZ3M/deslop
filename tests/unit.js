@@ -17,7 +17,17 @@ import {
   localSignals,
 } from '../src/lib/classify.js';
 import { QUESTIONS, CATEGORIES, focusQuestion } from '../src/lib/questions.js';
-import { createLimiter } from '../src/lib/jev.js';
+import {
+  createLimiter,
+  askJev,
+  resolveBackend,
+  backendTag,
+  systemOneUrl,
+  originPattern,
+  pickModels,
+  DECISIONS_URL,
+  DEFAULT_MODEL,
+} from '../src/lib/jev.js';
 
 const results = [];
 const test = async (name, fn) => {
@@ -362,6 +372,81 @@ await test('limiter caps concurrency', async () => {
     ),
   );
   eq(peak, 2);
+});
+
+// ── Model providers ─────────────────────────────────────────────────────────
+
+await test('server addresses become System One endpoints', () => {
+  eq(systemOneUrl('localhost:8000'), 'http://localhost:8000/v1/systemone');
+  eq(systemOneUrl('http://localhost:8888/'), 'http://localhost:8888/v1/systemone');
+  eq(systemOneUrl('http://box.lan:8888/v1'), 'http://box.lan:8888/v1/systemone');
+  eq(systemOneUrl('https://api.typesafe.ai'), 'https://api.typesafe.ai/v1/systemone');
+  eq(systemOneUrl('http://gpu:30000/v1/decisions'), 'http://gpu:30000/v1/decisions', 'full endpoints kept');
+  eq(systemOneUrl('https://proxy.example.com/laya/v1/systemone?x=1'), 'https://proxy.example.com/laya/v1/systemone');
+  eq(systemOneUrl('  '), null);
+  eq(systemOneUrl('http://'), null);
+  eq(originPattern('http://localhost:8000/v1/systemone'), 'http://localhost/*', 'permission covers any port');
+});
+
+await test('backend from settings and keys', () => {
+  const openrouter = { provider: 'openrouter', model: DEFAULT_MODEL, server: { url: 'localhost:8000', model: 'laya' } };
+  eq(resolveBackend(openrouter, {}), null, 'no key');
+  eq(resolveBackend(openrouter, { apiKey: 'k' }), { endpoint: DECISIONS_URL, apiKey: 'k', model: DEFAULT_MODEL });
+  const server = { ...openrouter, provider: 'server' };
+  eq(resolveBackend(server, { apiKey: 'k' }), { endpoint: 'http://localhost:8000/v1/systemone', apiKey: '', model: 'laya' }, 'OpenRouter key not sent to a server');
+  eq(resolveBackend({ ...server, server: { url: '', model: 'laya' } }, {}), null, 'no address');
+  eq(resolveBackend({ ...server, server: { url: 'localhost:8000', model: '' } }, { serverKey: 's' }).model, 'laya');
+});
+
+await test('cached answers are kept per model', () => {
+  eq(backendTag({ endpoint: DECISIONS_URL, model: DEFAULT_MODEL }), '', 'Jev keeps old cache keys');
+  const a = backendTag({ endpoint: DECISIONS_URL, model: 'perplexity/pplx-decider-v1.2' });
+  const b = backendTag({ endpoint: 'http://localhost:8000/v1/systemone', model: 'laya' });
+  eq(a !== '' && b !== '' && a !== b, true);
+});
+
+await test('requests go to the chosen server with the right headers', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, headers: init.headers, body: JSON.parse(init.body) });
+    return new Response(JSON.stringify({ model: 'laya', answers: { q: { noul: 0.9 } } }));
+  };
+  const q = { q: { type: 'noul', instructions: 'Is it?' } };
+  await askJev({ endpoint: 'http://localhost:8000/v1/systemone', model: 'laya', state: 'hi', questions: q, fetchImpl });
+  eq(calls[0].url, 'http://localhost:8000/v1/systemone');
+  eq(calls[0].body.model, 'laya');
+  eq('Authorization' in calls[0].headers, false, 'no key, no auth header');
+  eq('X-Title' in calls[0].headers, false, 'OpenRouter headers only for OpenRouter');
+  await askJev({ endpoint: 'http://localhost:8000/v1/systemone', apiKey: 'sk-local', model: 'laya', state: 'hi', questions: q, fetchImpl });
+  eq(calls[1].headers.Authorization, 'Bearer sk-local');
+  await askJev({ apiKey: 'sk-or', state: 'hi', questions: q, fetchImpl });
+  eq(calls[2].url, DECISIONS_URL);
+  eq(calls[2].headers['X-Title'], 'Deslop');
+  let err;
+  await askJev({ state: 'hi', questions: q, fetchImpl }).catch((e) => (err = e));
+  eq(err?.status, 401, 'OpenRouter still needs a key');
+});
+
+await test('OpenRouter model list', () => {
+  const now = Date.parse('2026-11-02');
+  const m = (id, name, prompt, extra = {}) => ({ id, name, pricing: { prompt: String(prompt) }, ...extra });
+  const list = pickModels(
+    [
+      m('perplexity/pplx-decider-v1.2', 'Perplexity: Decider V1.2', 0.00000002),
+      m('scaledown/classify-1', 'ScaleDown: Classify-1', 0.00000004),
+      m('respan/span-02', 'Respan: Span-02', 0.00000001),
+      m('liquid/d1', 'LiquidAI: d1', 0.00000002, { expiration_date: '2026-11-20' }),
+      m('liquid/d0', 'LiquidAI: d0', 0.00000002, { expiration_date: '2026-10-01' }),
+      m('typesafe/jev-1.14', 'TypeSafe: Jev 1.14', 0.000000042),
+      m(DEFAULT_MODEL, 'TypeSafe: Jev Latest', 0.000000042),
+    ],
+    now,
+  );
+  eq(list.map((x) => x.id), [DEFAULT_MODEL, 'liquid/d1', 'perplexity/pplx-decider-v1.2', 'typesafe/jev-1.14'], 'Jev Latest first, own-format and retired models dropped');
+  eq(list[0].name, 'Jev Latest');
+  eq(list[0].maker, 'TypeSafe');
+  eq(list[0].perThousandPosts.toFixed(4), '0.0966');
+  eq(list[1].expires, '2026-11-20');
 });
 
 const out = document.getElementById('out');

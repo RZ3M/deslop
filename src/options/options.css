@@ -116,6 +116,35 @@ textarea {
   min-width: 200px;
 }
 
+.panel {
+  display: grid;
+  gap: 12px;
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+select,
+input[type='text'],
+input[type='password'] {
+  min-width: 0;
+}
+
+select {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+select:focus {
+  outline: none;
+  border-color: var(--accent-text);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
 .status {
   font-size: 13px;
   min-height: 1em;
