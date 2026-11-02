@@ -8,7 +8,7 @@
   const PENDING_MAX_MS = 4000; // never keep a post blurred longer than this
   const GEO_WAIT_MS = 1500; // wait this long for a location before revealing
 
-  D.state = { settings: null, hasKey: false };
+  D.state = { settings: null, ready: false };
 
   D.send = (type, payload = {}) =>
     new Promise((resolve) => {
@@ -166,7 +166,7 @@
       const known = decisions.get(post.key);
       if (known) return render(el, container, post, known);
 
-      const blur = settings().hideWhileChecking && D.state.hasKey;
+      const blur = settings().hideWhileChecking && D.state.ready;
       if (blur) {
         container.dataset.deslop = 'pending';
         setTimeout(() => {

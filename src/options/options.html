@@ -14,28 +14,56 @@
       <div>
         <h1>Deslop</h1>
         <p class="muted">Hides engagement bait, AI slop, hate, recycled news and posts from countries you pick on X and LinkedIn, in any language.
-          Every post is judged by <a href="https://openrouter.ai/~typesafe/jev-latest" target="_blank" rel="noopener">Jev</a>, a model that answers typed questions with calibrated probabilities.</p>
+          Every post is judged by a decision model that answers typed questions with calibrated probabilities: <a href="https://openrouter.ai/~typesafe/jev-latest" target="_blank" rel="noopener">Jev</a> by default, another model on OpenRouter, or one you host yourself.</p>
       </div>
       <span id="saved" class="saved" aria-live="polite"></span>
     </header>
 
     <section class="card">
-      <h2>OpenRouter API key</h2>
-      <p class="muted">Stored only in this browser (<code>chrome.storage.local</code>) and sent only to openrouter.ai.
-        Each post costs roughly $0.0001 to check. <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">Get a key</a></p>
-      <div class="key-row">
-        <input type="password" id="apiKey" placeholder="sk-or-v1-…" autocomplete="off" spellcheck="false">
-        <button class="btn" id="toggleKey" type="button">Show</button>
-        <button class="btn primary" id="testKey" type="button">Save &amp; test</button>
+      <h2>Model</h2>
+      <div class="segmented wide" id="provider" role="group" aria-label="Where posts are checked">
+        <button type="button" data-value="openrouter">OpenRouter</button>
+        <button type="button" data-value="server">Your own server</button>
       </div>
-      <p id="keyStatus" class="status"></p>
-      <details>
-        <summary>Advanced</summary>
-        <label class="field">Model
-          <input type="text" id="model" spellcheck="false">
+
+      <div id="openrouterPanel" class="panel">
+        <p class="muted">Your key is stored only in this browser (<code>chrome.storage.local</code>) and sent only to openrouter.ai.
+          <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">Get a key</a></p>
+        <div class="key-row">
+          <input type="password" id="apiKey" placeholder="sk-or-v1-…" autocomplete="off" spellcheck="false" aria-label="OpenRouter API key">
+          <button class="btn" type="button" data-reveal="apiKey">Show</button>
+        </div>
+        <label class="field">Decision model
+          <select id="modelSelect"></select>
         </label>
-        <p class="muted small">Defaults to <code>~typesafe/jev-latest</code>, which always points at the newest Jev.</p>
-      </details>
+        <input type="text" id="modelOther" placeholder="maker/model-id" spellcheck="false" aria-label="OpenRouter model ID" hidden>
+        <p class="muted small" id="modelHelp"></p>
+      </div>
+
+      <div id="serverPanel" class="panel" hidden>
+        <p class="muted">Any server that speaks the System One API, for example <a href="https://pypi.org/project/laya/" target="_blank" rel="noopener">Laya</a>
+          (<code>laya-serve</code>, or Unsloth Studio with Settings → API → Decision API turned on), LocalAI, Ollama 0.35+ or SGLang. Posts go only to this address.</p>
+        <div class="two-col">
+          <label class="field">Server address
+            <input type="text" id="serverUrl" placeholder="http://localhost:8000" spellcheck="false" autocomplete="off">
+          </label>
+          <label class="field">Model
+            <input type="text" id="serverModel" placeholder="laya" spellcheck="false" autocomplete="off">
+          </label>
+        </div>
+        <label class="field"><span>API key <span class="muted small">(optional, most local servers don't need one)</span></span>
+          <span class="key-row">
+            <input type="password" id="serverKey" autocomplete="off" spellcheck="false">
+            <button class="btn" type="button" data-reveal="serverKey">Show</button>
+          </span>
+        </label>
+        <p class="muted small">Self-hosted models are free, but strictness is tuned for Jev, and small models such as Laya are much less decisive on Deslop's questions: they may hide little at Balanced and too much at Strict.</p>
+      </div>
+
+      <div class="key-row">
+        <button class="btn primary" id="testModel" type="button">Save &amp; test</button>
+      </div>
+      <p id="testStatus" class="status" aria-live="polite"></p>
     </section>
 
     <section class="card">
@@ -125,7 +153,7 @@
 
       <div class="two-col">
         <label class="field">Muted words
-          <textarea id="mutedWords" rows="4" placeholder="One per line, any language. Hidden instantly, without asking Jev."></textarea>
+          <textarea id="mutedWords" rows="4" placeholder="One per line, any language. Hidden instantly, without asking the model."></textarea>
           <small class="muted">Forms count: <code>canadian</code> also mutes <em>canadians</em>. Use <code>crypto*</code> for any word starting with crypto, or <code>"ai"</code> in quotes for the exact word.</small>
         </label>
         <label class="field">Never hide these accounts

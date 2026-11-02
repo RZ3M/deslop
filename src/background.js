@@ -1,4 +1,4 @@
-import { askJev, createLimiter, DEFAULT_MODEL } from './lib/jev.js';
+import { askJev, createLimiter, backendTag } from './lib/jev.js';
 import {
   buildState,
   questionsFor,
@@ -12,7 +12,7 @@ import {
   fnv1a,
 } from './lib/classify.js';
 import { locationQuestion, NO_COUNTRY, COUNTRY_CHOICE_MIN } from './lib/questions.js';
-import { loadSettings, getApiKey, setApiKey } from './lib/settings.js';
+import { loadSettings, getApiKey, setApiKey, getBackend } from './lib/settings.js';
 import { PersistentCache } from './lib/cache.js';
 import { matchPlace, isBlockedPlace, getCountry, placeLabel } from './lib/countries.js';
 
@@ -34,13 +34,16 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // ── Messages from content scripts, popup and options ─────────────────────────
 
 const handlers = {
-  'settings:get': async () => ({ settings: await getSettings(), hasKey: Boolean(await getApiKey()) }),
+  'settings:get': async () => {
+    const settings = await getSettings();
+    return { settings, ready: Boolean(await getBackend(settings)) };
+  },
   classify: ({ post }) => classify(post),
   'geo:get': ({ platform, key }) => geoGet(platform, key),
   'geo:put': ({ platform, key, raw }) => geoPut(platform, key, raw),
   hidden: ({ entry }) => recordHidden(entry),
   'stats:get': () => getStats(),
-  'key:test': ({ apiKey }) => testKey(apiKey),
+  'model:test': ({ settings }) => testModel(settings),
   'cache:clear': async () => {
     await Promise.all([answersCache.clear(), geoCache.clear(), geoModelCache.clear()]);
     return { ok: true };
@@ -79,10 +82,10 @@ async function classify(post) {
   const questions = questionsFor(settings, post.platform);
   if (!Object.keys(questions).length) return { hide: false, skipped: 'nothing-enabled' };
 
-  const apiKey = await getApiKey();
-  if (!apiKey) return { hide: false, skipped: 'no-key' };
+  const backend = await getBackend(settings);
+  if (!backend) return { hide: false, skipped: 'not-set-up' };
 
-  const cacheKey = `${post.platform}:${post.key}`;
+  const cacheKey = `${backendTag(backend)}${post.platform}:${post.key}`;
   let entry = await answersCache.get(cacheKey);
   const missing = missingQuestions(entry, questions);
 
@@ -91,8 +94,7 @@ async function classify(post) {
     if (!inflight.has(jobKey)) {
       const job = limit(() =>
         askJev({
-          apiKey,
-          model: settings.model || DEFAULT_MODEL,
+          ...backend,
           state: buildState(post),
           questions: missing,
         }),
@@ -159,19 +161,17 @@ async function geoVerdict(raw) {
 async function placeFromModel(raw, blocked) {
   const codes = blocked.filter((b) => !b.startsWith('region:'));
   if (!codes.length) return null;
-  const cacheKey = `${fnv1a(codes.slice().sort().join(','))}:${raw.toLowerCase()}`;
+  const backend = await getBackend(await getSettings());
+  if (!backend) return null;
+  const cacheKey = `${backendTag(backend)}${fnv1a(codes.slice().sort().join(','))}:${raw.toLowerCase()}`;
   const cached = await geoModelCache.get(cacheKey);
   if (cached !== undefined) return cached ? describeCode(cached) : null;
 
-  const apiKey = await getApiKey();
-  if (!apiKey) return null;
   const names = codes.map((c) => getCountry(c)?.name).filter(Boolean);
   try {
-    const settings = await getSettings();
     const res = await limit(() =>
       askJev({
-        apiKey,
-        model: settings.model || DEFAULT_MODEL,
+        ...backend,
         state: { location: raw },
         questions: { country: locationQuestion(names) },
       }),
@@ -250,18 +250,18 @@ async function getStats() {
     stats,
     recent,
     lastError,
-    hasKey: Boolean(await getApiKey()),
+    ready: Boolean(await getBackend(await getSettings())),
     cached: { posts: await answersCache.size(), accounts: await geoCache.size() },
   };
 }
 
-async function testKey(candidate) {
-  const apiKey = candidate?.trim() || (await getApiKey());
-  const settings = await getSettings();
+// The options page sends the settings it shows, which may not be saved yet.
+async function testModel(candidate) {
+  const backend = await getBackend(candidate || (await getSettings()));
+  if (!backend) throw new Error(candidate?.provider === 'server' ? 'Enter your server address first' : 'Enter your OpenRouter API key first');
   const started = Date.now();
   const res = await askJev({
-    apiKey,
-    model: settings.model || DEFAULT_MODEL,
+    ...backend,
     retries: 0,
     state: 'Comment "GUIDE" and I will DM you the free template 👇',
     questions: { bait: { type: 'noul', instructions: 'Does this post withhold content to farm comments?' } },
@@ -274,7 +274,7 @@ async function testKey(candidate) {
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   if (reason === 'update') await chrome.storage.local.remove('cache:answers'); // pre-0.2 cache format
   await importLocalKey();
-  if (reason === 'install' && !(await getApiKey())) chrome.runtime.openOptionsPage();
+  if (reason === 'install' && !(await getBackend(await getSettings()))) chrome.runtime.openOptionsPage();
 });
 chrome.runtime.onStartup.addListener(importLocalKey);
 

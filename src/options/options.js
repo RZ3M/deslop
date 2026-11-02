@@ -1,4 +1,5 @@
-import { loadSettings, saveSettings, getApiKey, setApiKey, DEFAULT_SETTINGS } from '../lib/settings.js';
+import { loadSettings, saveSettings, getApiKey, setApiKey, getServerKey, setServerKey, DEFAULT_SETTINGS } from '../lib/settings.js';
+import { DEFAULT_MODEL, DEFAULT_SERVER_MODEL, listOpenRouterModels, systemOneUrl, originPattern } from '../lib/jev.js';
 import { CATEGORIES, GROUPS, THRESHOLDS, FOCUS_STRENGTH } from '../lib/questions.js';
 import { COUNTRIES, REGIONS, getCountry, getRegion } from '../lib/countries.js';
 
@@ -28,38 +29,161 @@ function bindToggle(id, get, set) {
   });
 }
 
-// ── API key ─────────────────────────────────────────────────────────────────
+// ── Model ───────────────────────────────────────────────────────────────────
 
 $('apiKey').value = await getApiKey();
-$('model').value = settings.model;
+$('serverKey').value = await getServerKey();
+$('serverUrl').value = settings.server.url;
+$('serverModel').value = settings.server.model;
 
-$('toggleKey').addEventListener('click', () => {
-  const input = $('apiKey');
-  input.type = input.type === 'password' ? 'text' : 'password';
-  $('toggleKey').textContent = input.type === 'password' ? 'Show' : 'Hide';
+function renderProvider() {
+  for (const b of $('provider').querySelectorAll('button')) {
+    b.setAttribute('aria-pressed', String(b.dataset.value === settings.provider));
+  }
+  $('openrouterPanel').hidden = settings.provider !== 'openrouter';
+  $('serverPanel').hidden = settings.provider !== 'server';
+  setStatus('');
+}
+$('provider').addEventListener('click', (e) => {
+  const value = e.target.closest('button')?.dataset.value;
+  if (!value) return;
+  settings.provider = value;
+  renderProvider();
+  save();
+});
+renderProvider();
+
+for (const btn of document.querySelectorAll('[data-reveal]')) {
+  btn.addEventListener('click', () => {
+    const input = $(btn.dataset.reveal);
+    input.type = input.type === 'password' ? 'text' : 'password';
+    btn.textContent = input.type === 'password' ? 'Show' : 'Hide';
+  });
+}
+
+// OpenRouter's decision models, loaded live so new ones show up without an update.
+const OTHER = '__other';
+let models = [];
+let modelsFailed = false;
+
+function formatPrice(perThousand) {
+  if (!perThousand) return 'free';
+  return perThousand < 0.01 ? 'under $0.01 per 1,000 posts' : `$${perThousand.toFixed(2)} per 1,000 posts`;
+}
+
+function renderModels() {
+  const select = $('modelSelect');
+  const known = models.some((m) => m.id === settings.model);
+  const groups = new Map();
+  for (const m of models) {
+    if (!groups.has(m.maker)) groups.set(m.maker, []);
+    groups.get(m.maker).push(m);
+  }
+  const nodes = [...groups].map(([maker, list]) => {
+    const group = document.createElement('optgroup');
+    group.label = maker;
+    group.append(
+      ...list.map((m) => {
+        const tags = [formatPrice(m.perThousandPosts)];
+        if (m.id === DEFAULT_MODEL) tags.unshift('recommended');
+        if (m.expires) tags.push(`retiring ${new Date(m.expires).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })}`);
+        return new Option(`${m.name} · ${tags.join(' · ')}`, m.id);
+      }),
+    );
+    return group;
+  });
+  if (!models.length) nodes.push(new Option(settings.model, settings.model));
+  nodes.push(new Option('Other model ID…', OTHER));
+  select.replaceChildren(...nodes);
+  const other = models.length && !known;
+  select.value = other ? OTHER : settings.model;
+  $('modelOther').hidden = !other;
+  if (other) $('modelOther').value = settings.model;
+  renderModelHelp();
+}
+
+function renderModelHelp() {
+  const notes = [
+    settings.model === DEFAULT_MODEL
+      ? "Deslop's questions and strictness levels are tuned for Jev, and Jev Latest always points at its newest version."
+      : 'Strictness is tuned for Jev. Other models may hide a little more or less, so try Relaxed or Strict if it feels off.',
+    'Prices assume the default filters; each filter you add costs a little more.',
+  ];
+  if (modelsFailed) notes.push("Couldn't load OpenRouter's model list, so pick Other and type a model ID.");
+  $('modelHelp').textContent = notes.join(' ');
+}
+
+$('modelSelect').addEventListener('change', () => {
+  const value = $('modelSelect').value;
+  $('modelOther').hidden = value !== OTHER;
+  if (value === OTHER) {
+    $('modelOther').focus();
+    return;
+  }
+  settings.model = value;
+  renderModelHelp();
+  save();
+});
+$('modelOther').addEventListener('change', () => {
+  settings.model = $('modelOther').value.trim() || DEFAULT_MODEL;
+  renderModelHelp();
+  save();
 });
 
-$('testKey').addEventListener('click', async () => {
-  const status = $('keyStatus');
-  const key = $('apiKey').value.trim();
-  status.className = 'status';
-  status.textContent = 'Testing…';
-  await setApiKey(key);
-  const res = await chrome.runtime.sendMessage({ type: 'key:test', apiKey: key });
+renderModels();
+listOpenRouterModels()
+  .then((list) => (models = list))
+  .catch(() => (modelsFailed = true))
+  .finally(renderModels);
+
+$('serverUrl').addEventListener('change', () => {
+  settings.server.url = $('serverUrl').value.trim();
+  save();
+});
+$('serverModel').addEventListener('change', () => {
+  settings.server.model = $('serverModel').value.trim() || DEFAULT_SERVER_MODEL;
+  save();
+});
+$('apiKey').addEventListener('change', () => setApiKey($('apiKey').value));
+$('serverKey').addEventListener('change', () => setServerKey($('serverKey').value));
+
+function setStatus(text, kind = '') {
+  $('testStatus').className = `status ${kind}`.trim();
+  $('testStatus').textContent = text;
+}
+
+$('testModel').addEventListener('click', async () => {
+  settings.server.url = $('serverUrl').value.trim();
+  settings.server.model = $('serverModel').value.trim() || DEFAULT_SERVER_MODEL;
+
+  // A self-hosted server needs permission for its host. Ask first, while
+  // Chrome still counts this as a click.
+  if (settings.provider === 'server') {
+    const endpoint = systemOneUrl(settings.server.url);
+    if (!endpoint) return setStatus('Enter your server address, for example http://localhost:8000', 'err');
+    const granted = await chrome.permissions.request({ origins: [originPattern(endpoint)] }).catch(() => false);
+    if (!granted) return setStatus(`Deslop needs your permission to reach ${new URL(endpoint).host}.`, 'err');
+  }
+
+  setStatus('Testing…');
+  clearTimeout(saveTimer);
+  await Promise.all([saveSettings(settings), setApiKey($('apiKey').value), setServerKey($('serverKey').value)]);
+  const res = await chrome.runtime.sendMessage({ type: 'model:test', settings });
   if (res?.ok) {
     const { model, ms, bait } = res.result;
-    status.className = 'status ok';
-    status.textContent = `Connected to ${model} in ${ms} ms. Test post scored ${Math.round(bait * 100)}% engagement bait.`;
+    setStatus(`Connected to ${model} in ${ms} ms. Test post scored ${Math.round(bait * 100)}% engagement bait.`, 'ok');
   } else {
-    status.className = 'status err';
-    status.textContent = res?.error || 'Test failed';
+    setStatus(res?.error || 'Test failed', 'err');
   }
 });
 
-$('model').addEventListener('change', () => {
-  settings.model = $('model').value.trim() || DEFAULT_SETTINGS.model;
-  save();
-});
+// Saved before this version, or the permission was removed in chrome://extensions.
+if (settings.provider === 'server' && settings.server.url) {
+  const endpoint = systemOneUrl(settings.server.url);
+  if (endpoint && !(await chrome.permissions.contains({ origins: [originPattern(endpoint)] }))) {
+    setStatus(`Click Save & test to let Deslop reach ${new URL(endpoint).host}.`, 'err');
+  }
+}
 
 // ── Categories and behaviour ────────────────────────────────────────────────
 
@@ -90,7 +214,7 @@ $('categories').replaceChildren(
 );
 
 const STRICTNESS_HELP = {
-  relaxed: 'Only hides posts Jev is very sure about. Some slop gets through.',
+  relaxed: 'Only hides posts the model is very sure about. Some slop gets through.',
   balanced: 'Recommended. Hides clear slop and keeps normal posts.',
   strict: 'Hides anything that leans sloppy, including some borderline posts.',
 };
@@ -300,7 +424,7 @@ async function renderData() {
   if (!res?.ok) return;
   const { stats, cached } = res.result;
   $('dataInfo').textContent =
-    `${stats.hiddenTotal} posts hidden so far · $${stats.spendTotal.toFixed(4)} spent on Jev in total · ` +
+    `${stats.hiddenTotal} posts hidden so far · $${stats.spendTotal.toFixed(4)} spent on OpenRouter in total · ` +
     `${cached.posts} post verdicts and ${cached.accounts} account locations cached.`;
 }
 
@@ -310,7 +434,7 @@ $('clearCache').addEventListener('click', async () => {
 });
 
 $('resetSettings').addEventListener('click', async () => {
-  if (!confirm('Reset all settings to defaults? Your API key is kept.')) return;
+  if (!confirm('Reset all settings to defaults? Your API keys are kept.')) return;
   settings = structuredClone(DEFAULT_SETTINGS);
   await saveSettings(settings);
   location.reload();

@@ -28,6 +28,7 @@
   },
   "permissions": ["storage"],
   "host_permissions": ["https://openrouter.ai/*"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
   "content_scripts": [
     {
       "matches": ["https://x.com/*", "https://twitter.com/*"],

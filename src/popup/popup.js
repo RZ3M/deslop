@@ -50,7 +50,7 @@ $('openOptions').addEventListener('click', () => chrome.runtime.openOptionsPage(
 async function renderStats() {
   const res = await chrome.runtime.sendMessage({ type: 'stats:get' });
   if (!res?.ok) return;
-  const { stats, recent, lastError, hasKey, cached } = res.result;
+  const { stats, recent, lastError, ready, cached } = res.result;
 
   $('hiddenToday').textContent = stats.hiddenToday;
   $('checksToday').textContent = stats.checksToday;
@@ -58,16 +58,16 @@ async function renderStats() {
   $('cacheInfo').textContent = `${cached.posts} posts · ${cached.accounts} accounts cached`;
 
   const notice = $('notice');
-  if (!hasKey) {
+  if (!ready) {
     notice.hidden = false;
-    notice.innerHTML = 'Add your OpenRouter API key to start filtering. <a href="#" id="setKey">Open settings</a>';
+    notice.innerHTML = 'Add an OpenRouter API key or your own server to start filtering. <a href="#" id="setKey">Open settings</a>';
     $('setKey').addEventListener('click', (e) => {
       e.preventDefault();
       chrome.runtime.openOptionsPage();
     });
   } else if (lastError && Date.now() - lastError.at < 10 * 60e3) {
     notice.hidden = false;
-    notice.textContent = `Jev error: ${lastError.message.slice(0, 140)}`;
+    notice.textContent = `Model error: ${lastError.message.slice(0, 140)}`;
   } else {
     notice.hidden = true;
   }
