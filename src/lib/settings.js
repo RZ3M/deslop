@@ -32,6 +32,7 @@ export const DEFAULT_SETTINGS = {
   provider: 'openrouter', // openrouter | server (self-hosted, System One API)
   model: DEFAULT_MODEL, // OpenRouter model
   server: { url: '', model: DEFAULT_SERVER_MODEL },
+  spendCap: { enabled: true, daily: 0.5 }, // USD per day, OpenRouter only
 };
 
 export async function loadSettings() {

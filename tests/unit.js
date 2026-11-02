@@ -28,6 +28,7 @@ import {
   DECISIONS_URL,
   DEFAULT_MODEL,
 } from '../src/lib/jev.js';
+import { connectOpenRouter, authUrl, challengeFor, KEYS_URL } from '../src/lib/connect.js';
 
 const results = [];
 const test = async (name, fn) => {
@@ -447,6 +448,51 @@ await test('OpenRouter model list', () => {
   eq(list[0].maker, 'TypeSafe');
   eq(list[0].perThousandPosts.toFixed(4), '0.0966');
   eq(list[1].expires, '2026-11-20');
+});
+
+// ── Connect OpenRouter ──────────────────────────────────────────────────────
+
+await test('PKCE challenge matches the RFC 7636 example', async () => {
+  eq(await challengeFor('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk'), 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM');
+});
+
+await test('connect URL', () => {
+  const url = new URL(authUrl({ redirectUrl: 'https://abc.chromiumapp.org/', challenge: 'ch', state: 'st' }));
+  eq(url.origin + url.pathname, 'https://openrouter.ai/auth');
+  eq(Object.fromEntries(url.searchParams), {
+    callback_url: 'https://abc.chromiumapp.org/',
+    code_challenge: 'ch',
+    code_challenge_method: 'S256',
+    key_label: 'Deslop',
+    state: 'st',
+  });
+});
+
+await test('connect exchanges the code for a key', async () => {
+  let sent;
+  const launch = async (url) => {
+    const p = new URL(url).searchParams;
+    return `https://abc.chromiumapp.org/?code=the-code&state=${p.get('state')}`;
+  };
+  const fetchImpl = async (url, init) => {
+    sent = { url, body: JSON.parse(init.body) };
+    return new Response(JSON.stringify({ key: 'sk-or-v1-new' }));
+  };
+  const key = await connectOpenRouter({ launch, redirectUrl: 'https://abc.chromiumapp.org/', fetchImpl });
+  eq(key, 'sk-or-v1-new');
+  eq(sent.url, KEYS_URL);
+  eq(sent.body.code, 'the-code');
+  eq(sent.body.code_challenge_method, 'S256');
+  eq(sent.body.code_verifier.length >= 43, true, 'verifier length');
+});
+
+await test('connect refuses a mismatched state, a cancel or a failed exchange', async () => {
+  const fail = async (opts) => connectOpenRouter({ redirectUrl: 'https://abc.chromiumapp.org/', ...opts }).then(() => 'no error', (e) => e.message);
+  const ok = async () => new Response(JSON.stringify({ key: 'k' }));
+  eq(await fail({ launch: async () => 'https://abc.chromiumapp.org/?code=c&state=wrong', fetchImpl: ok }), 'OpenRouter sent back an unexpected response; try again');
+  eq(await fail({ launch: async () => { throw new Error('The user did not approve access.'); }, fetchImpl: ok }), 'Connection cancelled');
+  const launch = async (url) => `https://abc.chromiumapp.org/?code=c&state=${new URL(url).searchParams.get('state')}`;
+  eq(await fail({ launch, fetchImpl: async () => new Response('', { status: 403 }) }), 'OpenRouter couldn’t create a key (403)');
 });
 
 const out = document.getElementById('out');

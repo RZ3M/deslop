@@ -1,4 +1,4 @@
-import { askJev, createLimiter, backendTag } from './lib/jev.js';
+import { askJev, createLimiter, backendTag, DECISIONS_URL } from './lib/jev.js';
 import {
   buildState,
   questionsFor,
@@ -90,6 +90,7 @@ async function classify(post) {
   const missing = missingQuestions(entry, questions);
 
   if (Object.keys(missing).length) {
+    if (await overCap(settings, backend)) return { hide: false, skipped: 'cap-reached' };
     const jobKey = `${cacheKey}:${Object.entries(missing).map(([id, q]) => `${id}=${questionHash(q)}`).sort().join(',')}`;
     if (!inflight.has(jobKey)) {
       const job = limit(() =>
@@ -167,6 +168,7 @@ async function placeFromModel(raw, blocked) {
   const cached = await geoModelCache.get(cacheKey);
   if (cached !== undefined) return cached ? describeCode(cached) : null;
 
+  if (await overCap(await getSettings(), backend)) return null;
   const names = codes.map((c) => getCountry(c)?.name).filter(Boolean);
   try {
     const res = await limit(() =>
@@ -195,7 +197,8 @@ function describeCode(code) {
 
 // ── Stats, spend and errors ─────────────────────────────────────────────────
 
-const today = () => new Date().toISOString().slice(0, 10);
+// The local date, so "today" and the spending cap reset at the user's midnight.
+const today = () => new Date().toLocaleDateString('en-CA');
 
 async function readStats() {
   const { stats } = await chrome.storage.local.get('stats');
@@ -212,6 +215,17 @@ function updateStats(fn) {
     await chrome.storage.local.set({ stats: s });
   });
   return statsQueue;
+}
+
+// The daily spending cap only applies to OpenRouter; self-hosted servers are free.
+function capFor(settings, backend) {
+  const cap = settings.spendCap;
+  return backend?.endpoint === DECISIONS_URL && cap?.enabled && cap.daily > 0 ? cap.daily : null;
+}
+
+async function overCap(settings, backend) {
+  const cap = capFor(settings, backend);
+  return cap !== null && (await readStats()).spendToday >= cap;
 }
 
 async function recordUsage(usage) {
@@ -242,6 +256,8 @@ async function recordError(err) {
 }
 
 async function getStats() {
+  const settings = await getSettings();
+  const backend = await getBackend(settings);
   const [stats, { recent = [], lastError = null }] = await Promise.all([
     readStats(),
     chrome.storage.local.get(['recent', 'lastError']),
@@ -250,7 +266,8 @@ async function getStats() {
     stats,
     recent,
     lastError,
-    ready: Boolean(await getBackend(await getSettings())),
+    ready: Boolean(backend),
+    cap: capFor(settings, backend),
     cached: { posts: await answersCache.size(), accounts: await geoCache.size() },
   };
 }

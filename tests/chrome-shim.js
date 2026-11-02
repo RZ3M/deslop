@@ -48,7 +48,7 @@
   async function demoResponse(msg) {
     if (msg.type === 'stats:get') {
       const { apiKey } = await area('local').get('apiKey');
-      return { ok: true, result: { ...demo, lastError: null, ready: Boolean(apiKey), cached: { posts: 1843, accounts: 322 } } };
+      return { ok: true, result: { ...demo, lastError: null, ready: Boolean(apiKey), cap: 0.5, cached: { posts: 1843, accounts: 322 } } };
     }
     if (msg.type === 'model:test') return { ok: true, result: { model: 'typesafe/jev-1.13-20260917', ms: 412, bait: 0.97 } };
     return { ok: true, result: {} };
@@ -70,6 +70,12 @@
   }
 
   window.chrome = {
+    identity: {
+      getRedirectURL: () => 'https://shim.chromiumapp.org/',
+      launchWebAuthFlow: async () => {
+        throw new Error('The user did not approve access.');
+      },
+    },
     permissions: {
       request: async () => true,
       contains: async () => true,
