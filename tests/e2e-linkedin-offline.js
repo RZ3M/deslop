@@ -147,5 +147,8 @@ for (const c of HIDDEN) {
 const blockedCount = recent.filter((r) => r.handle === 'globex').length;
 check(blockedCount === 0, `ublock not counted as hidden (${blockedCount})`);
 
+const { stats } = (await chrome.runtime.sendMessage({ type: 'stats:get' })).result;
+check(stats.hiddenToday >= HIDDEN.length && !Object.keys(stats.days || {}).length, `no daily history unless it's turned on (${stats.hiddenToday} hidden today, ${Object.keys(stats.days || {}).length} days kept)`);
+
 report.textContent = `${pass}/${total} checks passed\n` + report.textContent;
 window.e2e = { passed: pass, total, report: report.textContent };

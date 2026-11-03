@@ -38,12 +38,33 @@
     stats: { day: new Date().toISOString().slice(0, 10), hiddenToday: 23, hiddenTotal: 412, byReason: {}, spendToday: 0.0021, spendTotal: 0.0374, checksToday: 186 },
     recent: [
       { platform: 'x', author: 'Growth Guru', handle: '@growthguru', snippet: 'I found a Claude prompt that writes a month of content in 10 minutes. The prompt is in the replies 👇', reasonId: 'engagement_bait', reasons: [{ label: 'Engagement bait', value: 0.99 }], at: now - 60e3 },
+      { platform: 'reddit', author: '', handle: 'u/sweet_mia_x', snippet: 'Just moved to Toronto, any coffee recommendations? ☕', reasonId: 'porn_bot', reasons: [{ label: 'Profile links to OnlyFans', value: 1 }], at: now - 90e3 },
       { platform: 'linkedin', author: 'Mark T.', snippet: "In today's fast-paced digital landscape, leadership isn't about having all the answers — it's about asking the right questions. 🚀 Embrace uncertainty", reasonId: 'ai_generated', reasons: [{ label: 'AI-generated writing', value: 1 }], at: now - 120e3 },
       { platform: 'x', author: 'AI Daily Brief', handle: '@aidailybrief', snippet: 'AI news you missed this week 🧵 1. OpenAI released a new reasoning model 2. Google updated Gemini', reasonId: 'news_rehash', reasons: [{ label: 'Recycled news', value: 0.93 }], at: now - 300e3 },
       { platform: 'x', author: 'Some Account', handle: '@someaccount', snippet: 'gm frens, huge alpha dropping tonight', reasonId: 'country', reasons: [{ label: 'Based in 🇨🇦 Canada', value: 1 }], at: now - 400e3 },
       { platform: 'linkedin', author: 'Chad W.', snippet: 'Yesterday I fired my best salesperson. He hit 200% of quota. He was loved by clients.', reasonId: 'hollow_inspiration', reasons: [{ label: 'Broetry & humblebrags', value: 0.95 }], at: now - 600e3 },
     ],
   };
+
+  // 90 days of made-up history for the charts in settings.
+  let seed = 7;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const REASONS = { x: ['engagement_bait', 'ai_generated', 'news_rehash', 'clickbait', 'hate_speech', 'muted'], linkedin: ['linkedinfluencer', 'ai_generated', 'hollow_inspiration', 'fancy_fonts', 'engagement_bait'], reddit: ['porn_bot', 'ai_generated', 'hostile', 'promoted'] };
+  demo.stats.days = {};
+  for (let i = 89; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400e3).toLocaleDateString('en-CA');
+    const hidden = {};
+    const checks = {};
+    for (const [site, reasons] of Object.entries(REASONS)) {
+      hidden[site] = {};
+      reasons.forEach((r, j) => {
+        const n = Math.round(rand() * (site === 'reddit' ? 9 : 6) / (j + 1));
+        if (n) hidden[site][r] = n;
+      });
+      checks[site] = Math.round(30 + rand() * 60);
+    }
+    demo.stats.days[d] = { hidden, checks, spend: 0.004 + rand() * 0.01 };
+  }
 
   async function demoResponse(msg) {
     if (msg.type === 'stats:get') {

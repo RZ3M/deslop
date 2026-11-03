@@ -1,12 +1,12 @@
-// Shared content-script engine. Platform adapters (x.js, linkedin.js) tell it
-// how to find posts, extract them and look up author locations; the engine
-// handles classification, the country filter and hiding.
+// Shared content-script engine. Platform adapters (x.js, linkedin.js,
+// reddit.js) tell it how to find posts, extract them and look up authors; the
+// engine handles classification, the account checks and hiding.
 (() => {
   if (globalThis.__deslop) return;
   const D = (globalThis.__deslop = {});
 
   const PENDING_MAX_MS = 4000; // never keep a post blurred longer than this
-  const GEO_WAIT_MS = 1500; // wait this long for a location before revealing
+  const ACCOUNT_WAIT_MS = 1500; // wait this long for the account checks before revealing
 
   D.state = { settings: null, ready: false };
 
@@ -126,8 +126,10 @@
     const platform = adapter.platform;
     const tracked = new Map(); // post element -> post key currently rendered
     const decisions = new Map(); // post key -> decision (instant re-render after virtualization)
-    const geoMemo = new Map(); // place key -> Promise<geo verdict>
+    const lookups = new Map(); // "geo:key" or "profile:key" -> Promise<verdict>
     const reported = new Set();
+    const outsideBars = new WeakMap(); // container -> its bar, when bars go outside posts
+    const unseen = new Set(); // posts to hide that something else hides for now (an ad blocker, a collapsed thread)
     let scanScheduled = false;
 
     const settings = () => D.state.settings;
@@ -145,7 +147,20 @@
     function scan() {
       for (const el of tracked.keys()) if (!el.isConnected) tracked.delete(el);
       if (!active()) return;
+      recheckUnseen();
       for (const el of adapter.findPosts()) processPost(el);
+    }
+
+    // A post that comes into view (a reply in a thread you expand) is looked at again.
+    function recheckUnseen() {
+      if (!unseen.size) return;
+      for (const el of unseen) {
+        if (!el.isConnected) unseen.delete(el);
+        else if (!hiddenElsewhere(el)) {
+          unseen.delete(el);
+          tracked.delete(el);
+        }
+      }
     }
 
     async function processPost(el) {
@@ -160,7 +175,7 @@
       tracked.set(el, post.key);
 
       const container = adapter.container(el);
-      clear(container);
+      clear(el, container);
       if (adapter.skip(post, el) || isAllowlisted(post)) return;
 
       const known = decisions.get(post.key);
@@ -174,75 +189,101 @@
         }, PENDING_MAX_MS);
       }
 
-      // Slop check first. Location lookups are rate-limited (X) or may count as
-      // a profile view (LinkedIn), so they only run for posts that survive it.
+      // Slop check first. Account lookups are rate-limited (X, Reddit) or may
+      // count as a profile view (LinkedIn), so they only run for posts that
+      // survive it.
       const textRes = await D.send('classify', { post });
       if (tracked.get(el) !== post.key) return;
 
       let decision = { hide: false, reasons: [] };
-      let geo = null;
-      let quickGeo = null;
+      let account = null;
+      let quick = null;
       if (textRes.ok && textRes.result.hide) {
         decision = { hide: true, reasons: textRes.result.reasons };
       } else {
-        geo = countryCheck(post);
-        quickGeo = await Promise.race([geo, D.sleep(GEO_WAIT_MS).then(() => 'slow')]);
+        account = firstBlock([countryCheck(post), profileCheck(post)]);
+        quick = await Promise.race([account, D.sleep(ACCOUNT_WAIT_MS).then(() => 'slow')]);
         if (tracked.get(el) !== post.key) return;
-        if (quickGeo && quickGeo !== 'slow' && quickGeo.blocked) decision = countryDecision(quickGeo);
+        if (quick && quick !== 'slow') decision = quick;
       }
 
       decisions.set(post.key, decision);
       render(el, container, post, decision);
 
-      if (!decision.hide && quickGeo === 'slow') {
-        geo.then((g) => {
-          if (!g?.blocked || tracked.get(el) !== post.key) return;
-          const late = countryDecision(g);
+      if (!decision.hide && quick === 'slow') {
+        account.then((late) => {
+          if (!late || tracked.get(el) !== post.key) return;
           decisions.set(post.key, late);
           render(el, container, post, late);
         });
       }
     }
 
-    function countryDecision(g) {
-      return { hide: true, reasons: [{ id: 'country', label: `Based in ${g.label}`, value: 1 }] };
+    // The first account check to hide the post, or null once none does.
+    function firstBlock(checks) {
+      return new Promise((resolve) => {
+        let left = checks.length;
+        const done = (d) => (d ? resolve(d) : --left || resolve(null));
+        checks.forEach((c) => c.then(done, () => done(null)));
+      });
     }
 
     function countryCheck(post) {
       const c = settings().countries;
-      const enabledHere = platform === 'x' ? c.onX : c.onLinkedIn;
+      const enabledHere = { x: c.onX, linkedin: c.onLinkedIn }[platform];
       if (!c.blocked.length || !enabledHere || !adapter.placeKey) return Promise.resolve(null);
       const key = adapter.placeKey(post);
       if (!key) return Promise.resolve(null);
-      if (!geoMemo.has(key)) {
-        geoMemo.set(
-          key,
+      return lookup('geo', key, () => adapter.lookupPlace(post)).then((g) =>
+        g?.blocked ? { hide: true, reasons: [{ id: 'country', label: `Based in ${g.label}`, value: 1 }] } : null,
+      );
+    }
+
+    // Rules about the author's profile (Reddit: OnlyFans links, new NSFW
+    // accounts). The adapter decides which authors are worth a lookup.
+    function profileCheck(post) {
+      const key = adapter.profileKey?.(post);
+      if (!key) return Promise.resolve(null);
+      return lookup('profile', key, () => adapter.lookupProfile(post)).then((p) =>
+        p?.blocked ? { hide: true, reasons: [{ id: 'porn_bot', label: p.label, value: 1 }] } : null,
+      );
+    }
+
+    // Raw account facts are cached by the background (which turns them into a
+    // verdict under the current settings); each one is looked up once per page.
+    function lookup(kind, key, fetchRaw) {
+      const id = `${kind}:${key}`;
+      if (!lookups.has(id)) {
+        lookups.set(
+          id,
           (async () => {
-            const cached = await D.send('geo:get', { platform, key });
+            const cached = await D.send(`${kind}:get`, { platform, key });
             if (cached.ok && cached.result.hit) return cached.result;
-            const raw = await adapter.lookupPlace(post);
+            const raw = await fetchRaw();
             if (raw === undefined) {
-              geoMemo.delete(key); // lookup failed or was deferred; try again later
+              lookups.delete(id); // lookup failed or was deferred; try again later
               return null;
             }
-            const put = await D.send('geo:put', { platform, key, raw });
+            const put = await D.send(`${kind}:put`, { platform, key, raw });
             return put.ok ? put.result : null;
           })(),
         );
       }
-      return geoMemo.get(key);
+      return lookups.get(id);
     }
 
     function render(el, container, post, decision) {
-      clear(container);
-      if (!decision.hide || hiddenElsewhere(el)) return;
+      clear(el, container);
+      if (!decision.hide) return;
+      if (hiddenElsewhere(el)) return unseen.add(el);
       // Ad blockers can hide a post a moment after it appears.
       setTimeout(() => {
         if (tracked.get(el) !== post.key || !container.dataset.deslop || !hiddenElsewhere(el)) return;
-        clear(container);
+        clear(el, container);
         tracked.delete(el); // look again if the post comes back
       }, 1000);
-      if (decision.revealed) return reveal(container, decision);
+      const noun = adapter.noun?.(el) || 'post'; // "Deslop hid a comment"
+      if (decision.revealed) return reveal(container, decision, noun);
 
       if (!reported.has(post.key)) {
         reported.add(post.key);
@@ -261,34 +302,34 @@
         adapter.onHidden?.(el, post, decision);
       }
 
-      if (settings().hideMode === 'collapse') collapse(container, decision);
-      else container.dataset.deslop = 'hidden';
+      if (settings().hideMode === 'collapse') collapse(container, decision, noun);
+      else (adapter.removeTarget?.(el) || container).dataset.deslop = 'hidden';
     }
 
     // Placeholder bar with a Show button. Show and Hide again only change
     // data-deslop once each, so the post doesn't flicker.
-    function collapse(container, decision) {
+    function collapse(container, decision, noun) {
       container.dataset.deslop = 'collapsed';
-      setBar(container, null, `Deslop hid a post — ${why(decision)}`, 'Show', () => {
+      setBar(container, null, `Deslop hid a ${noun} — ${why(decision)}`, 'Show', () => {
         decision.revealed = true;
-        reveal(container, decision);
+        reveal(container, decision, noun);
       });
     }
 
     // A post the user chose to see: marked so it stands out from the feed,
     // with a button to hide it again.
-    function reveal(container, decision) {
+    function reveal(container, decision, noun) {
       container.dataset.deslop = 'revealed';
       setBar(container, 'Shown', `Deslop hid this — ${why(decision)}`, 'Hide again', () => {
         decision.revealed = false;
-        collapse(container, decision);
+        collapse(container, decision, noun);
       });
     }
 
     function setBar(container, tag, text, label, onClick) {
-      container.querySelectorAll(':scope > .deslop-bar').forEach((b) => b.remove());
+      removeBar(container);
       const bar = document.createElement('div');
-      bar.className = 'deslop-bar';
+      bar.className = tag ? 'deslop-bar deslop-revealed' : 'deslop-bar';
       const msg = document.createElement('span');
       if (tag) {
         const pill = document.createElement('b');
@@ -306,7 +347,26 @@
         onClick();
       });
       bar.append(msg, btn);
-      container.prepend(bar);
+      if (!adapter.barOutside) return container.prepend(bar);
+      // Reddit's posts and comments render through shadow DOM, where a bar
+      // inside them may never show. The bar goes just before the post instead,
+      // in the same slot, and the post itself is hidden. It takes the post's
+      // background and corners (the bottom ones: a revealed post's top ones
+      // join the bar).
+      container.dataset.deslopOutside = '';
+      bar.classList.add('deslop-outside');
+      const style = getComputedStyle(container);
+      if (parseFloat(style.borderBottomLeftRadius)) bar.style.setProperty('--deslop-radius', style.borderBottomLeftRadius);
+      bar.style.setProperty('--deslop-card', style.backgroundColor);
+      if (container.slot) bar.slot = container.slot;
+      container.before(bar);
+      outsideBars.set(container, bar);
+    }
+
+    function removeBar(container) {
+      container.querySelectorAll(':scope > .deslop-bar').forEach((b) => b.remove());
+      outsideBars.get(container)?.remove();
+      outsideBars.delete(container);
     }
 
     function why(decision) {
@@ -330,25 +390,30 @@
       return gone;
     }
 
-    function clear(container) {
+    function clear(el, container = adapter.container(el)) {
       delete container.dataset.deslop;
-      container.querySelectorAll(':scope > .deslop-bar').forEach((b) => b.remove());
+      delete container.dataset.deslopOutside;
+      removeBar(container);
+      const target = adapter.removeTarget?.(el);
+      if (target) delete target.dataset.deslop;
     }
+
+    // "@handle" on X, a profile slug on LinkedIn, "u/name" on Reddit.
+    const accountId = (s) => s.toLowerCase().trim().replace(/^@|^\/?u\//, '');
 
     function isAllowlisted(post) {
       const list = settings()?.allowlist || [];
       if (!list.length) return false;
-      const ids = [post.author?.handle, post.author?.slug, post.author?.name]
-        .filter(Boolean)
-        .map((s) => s.toLowerCase().replace(/^@/, ''));
-      return list.some((a) => ids.includes(a.toLowerCase().trim().replace(/^@/, '')));
+      const ids = [post.author?.handle, post.author?.slug, post.author?.name].filter(Boolean).map(accountId);
+      return list.some((a) => ids.includes(accountId(a)));
     }
 
     function reset() {
-      for (const el of tracked.keys()) clear(adapter.container(el));
+      for (const el of tracked.keys()) clear(el);
       tracked.clear();
+      unseen.clear();
       decisions.clear();
-      geoMemo.clear();
+      lookups.clear();
     }
 
     D.onSettingsChanged = () => {
@@ -363,7 +428,9 @@
     });
 
     D.loadSettings().then(() => {
-      new MutationObserver(scheduleScan).observe(document.documentElement, { childList: true, subtree: true });
+      // Adapters can also watch attributes that show or hide posts (Reddit's collapsed threads).
+      const attributes = adapter.watchAttributes ? { attributes: true, attributeFilter: adapter.watchAttributes } : {};
+      new MutationObserver(scheduleScan).observe(document.documentElement, { childList: true, subtree: true, ...attributes });
       scan();
     });
 

@@ -13,6 +13,11 @@ html:not(.deslop-probe) [data-deslop='collapsed'] > :not(.deslop-bar) {
   display: none !important;
 }
 
+/* Reddit: the bar sits just before the post, which is hidden whole. */
+html:not(.deslop-probe) [data-deslop='collapsed'][data-deslop-outside] {
+  display: none !important;
+}
+
 .deslop-bar {
   display: flex;
   align-items: center;
@@ -47,8 +52,12 @@ html:not(.deslop-probe) [data-deslop='collapsed'] > :not(.deslop-bar) {
    rest of the feed, and its bar offers "Hide again". The tint is layered over
    the post's own background rather than replacing it, so elements painted in
    that background (LinkedIn's "…more" button) can take the same layer. */
-[data-deslop='revealed'] {
+[data-deslop='revealed'],
+.deslop-bar.deslop-revealed {
   --deslop-tint: linear-gradient(rgba(255, 204, 77, 0.1), rgba(255, 204, 77, 0.1));
+}
+
+[data-deslop='revealed'] {
   position: relative;
   background-image: var(--deslop-tint) !important;
 }
@@ -82,10 +91,41 @@ html:not(.deslop-probe) [data-deslop='collapsed'] > :not(.deslop-bar) {
   mix-blend-mode: darken;
 }
 
-[data-deslop='revealed'] > .deslop-bar {
+.deslop-bar.deslop-revealed {
   border-style: solid;
   border-color: rgba(255, 204, 77, 0.6);
   background: rgba(255, 204, 77, 0.12);
+}
+
+/* Reddit: the bar sits outside the post, so it takes the post card's shape
+   instead of being inset in it: full width and the post's own corners. A
+   revealed post and its bar join into one tinted card with a single yellow
+   edge. */
+.deslop-bar.deslop-outside {
+  margin: 4px 0;
+  padding: 8px 16px;
+  border-radius: var(--deslop-radius, 12px);
+  font-size: 14px;
+}
+
+.deslop-bar.deslop-outside.deslop-revealed {
+  margin-bottom: 0;
+  border: 0;
+  border-radius: var(--deslop-radius, 12px) var(--deslop-radius, 12px) 0 0;
+  background: var(--deslop-tint), var(--deslop-card, transparent);
+  box-shadow: inset 4px 0 0 #ffcc4d;
+}
+
+[data-deslop='revealed'][data-deslop-outside] {
+  margin-top: 0 !important;
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+}
+
+/* A revealed comment's text, so it doesn't run into the yellow edge. */
+[slot='comment'][data-deslop='revealed'][data-deslop-outside] {
+  padding: 2px 16px 8px !important;
+  border-radius: 0 0 12px 12px;
 }
 
 .deslop-tag {

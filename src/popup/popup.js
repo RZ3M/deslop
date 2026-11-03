@@ -1,15 +1,9 @@
 import { loadSettings, saveSettings } from '../lib/settings.js';
-import { CATEGORIES } from '../lib/questions.js';
+import { reasonLabel } from '../lib/reasons.js';
 
 const $ = (id) => document.getElementById(id);
-const REASON_LABELS = {
-  ...Object.fromEntries(CATEGORIES.map((c) => [c.id, c.short || c.label])),
-  country: 'Country',
-  off_topic: 'Off-focus',
-  muted: 'Muted word',
-  promoted: 'Promoted',
-  custom: 'Custom rule',
-};
+const PLATFORMS = { x: 'X', linkedin: 'LinkedIn', reddit: 'Reddit' };
+const BADGES = { x: '𝕏', linkedin: 'in', reddit: 'r/' };
 
 let settings = await loadSettings();
 
@@ -18,15 +12,15 @@ function renderSettings() {
   for (const b of $('strictness').querySelectorAll('button')) {
     b.setAttribute('aria-pressed', String(b.dataset.value === settings.strictness));
   }
-  for (const input of document.querySelectorAll('[data-platform]')) {
-    input.checked = Boolean(settings.platforms[input.dataset.platform]);
+  for (const b of $('platforms').querySelectorAll('button')) {
+    b.setAttribute('aria-pressed', String(Boolean(settings.platforms[b.dataset.platform])));
   }
   $('placeholders').checked = settings.hideMode === 'collapse';
-  const on = Object.entries(settings.platforms).filter(([, v]) => v).map(([k]) => (k === 'x' ? 'X' : 'LinkedIn'));
+  const on = Object.keys(PLATFORMS).filter((k) => settings.platforms[k]).map((k) => PLATFORMS[k]);
   $('subtitle').textContent = !settings.enabled
     ? 'Paused'
     : on.length
-      ? `Filtering ${on.join(' & ')} · ${cap(settings.strictness)}${settings.focus?.enabled && settings.focus.interests?.length ? ' · Focus on' : ''}`
+      ? `${on.length === 1 ? 'Filtering ' : ''}${listOf(on)} · ${cap(settings.strictness)}${settings.focus?.enabled && settings.focus.interests?.length ? ' · Focus on' : ''}`
       : 'No platforms enabled';
 }
 
@@ -41,9 +35,10 @@ $('strictness').addEventListener('click', (e) => {
   const value = e.target.closest('button')?.dataset.value;
   if (value) update((s) => (s.strictness = value));
 });
-for (const input of document.querySelectorAll('[data-platform]')) {
-  input.addEventListener('change', () => update((s) => (s.platforms[input.dataset.platform] = input.checked)));
-}
+$('platforms').addEventListener('click', (e) => {
+  const platform = e.target.closest('button')?.dataset.platform;
+  if (platform) update((s) => (s.platforms[platform] = !s.platforms[platform]));
+});
 $('placeholders').addEventListener('change', (e) => update((s) => (s.hideMode = e.target.checked ? 'collapse' : 'remove')));
 $('openOptions').addEventListener('click', () => chrome.runtime.openOptionsPage());
 
@@ -93,7 +88,7 @@ function renderItem(item) {
 
   const plat = document.createElement('span');
   plat.className = 'plat';
-  plat.textContent = item.platform === 'x' ? '𝕏' : 'in';
+  plat.textContent = BADGES[item.platform] || '';
 
   const who = document.createElement('span');
   who.className = 'who';
@@ -113,9 +108,11 @@ function renderItem(item) {
   chip.className = 'chip';
   const reason = item.reasons?.[0];
   chip.textContent =
-    item.reasonId === 'country' || item.reasonId === 'custom' || item.reasonId === 'muted'
-      ? reason?.label || REASON_LABELS[item.reasonId]
-      : REASON_LABELS[item.reasonId] || reason?.label || 'Hidden';
+    ['country', 'custom', 'muted', 'porn_bot'].includes(item.reasonId)
+      ? reason?.label || reasonLabel(item.reasonId)
+      : item.reasonId
+        ? reasonLabel(item.reasonId)
+        : reason?.label || 'Hidden';
   if (reason && reason.value < 1) chip.title = `${Math.round(reason.value * 100)}% confidence`;
 
   top.append(plat, who, chip);
@@ -137,6 +134,11 @@ function formatUsd(n) {
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);
+}
+
+// "X", "X & LinkedIn", "X, LinkedIn & Reddit"
+function listOf(names) {
+  return names.length < 3 ? names.join(' & ') : `${names.slice(0, -1).join(', ')} & ${names.at(-1)}`;
 }
 
 renderSettings();

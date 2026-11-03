@@ -12,6 +12,8 @@ import {
   wordCount,
   findMutedWord,
   focusActive,
+  categoryApplies,
+  siteOverride,
   fancyFonts,
   fancyFontScore,
   localSignals,
@@ -29,6 +31,8 @@ import {
   DEFAULT_MODEL,
 } from '../src/lib/jev.js';
 import { connectOpenRouter, authUrl, challengeFor, KEYS_URL } from '../src/lib/connect.js';
+import { profileVerdict, sanitizeProfile, bioSite, matchSite, ADULT_SITES, NEW_ACCOUNT_DAYS } from '../src/lib/profiles.js';
+import { DEFAULT_SETTINGS, migrateSettings } from '../src/lib/settings.js';
 
 const results = [];
 const test = async (name, fn) => {
@@ -493,6 +497,141 @@ await test('connect refuses a mismatched state, a cancel or a failed exchange', 
   eq(await fail({ launch: async () => { throw new Error('The user did not approve access.'); }, fetchImpl: ok }), 'Connection cancelled');
   const launch = async (url) => `https://abc.chromiumapp.org/?code=c&state=${new URL(url).searchParams.get('state')}`;
   eq(await fail({ launch, fetchImpl: async () => new Response('', { status: 403 }) }), 'OpenRouter couldn’t create a key (403)');
+});
+
+// ── Reddit profiles ─────────────────────────────────────────────────────────
+const NOW = Date.UTC(2026, 10, 2);
+const daysAgo = (d) => NOW / 1000 - d * 86400;
+const ON = { adultLinks: true, newAccounts: true };
+const label = (raw, opts = ON) => profileVerdict(raw, opts, NOW).label || null;
+
+await test('profile links to adult platforms', () => {
+  eq(label({ links: ['https://onlyfans.com/someone'] }), 'Profile links to OnlyFans');
+  eq(label({ links: ['https://www.fansly.com/someone/posts'] }), 'Profile links to Fansly');
+  eq(label({ links: ['https://en.stripchat.com/someone'] }), 'Profile links to Stripchat', 'subdomain');
+  eq(label({ links: ['https://onlyfans.com.example.net/'] }), null, 'lookalike host');
+  eq(label({ links: ['https://example.com/onlyfans'] }), null, 'only the host counts');
+  eq(label({ links: ['not a url', 'https://github.com/someone'] }), null);
+  eq(label({ links: ['https://onlyfans.com/someone'] }, { adultLinks: false }), null, 'can be turned off');
+});
+
+await test('bios that name adult platforms, in any styling', () => {
+  eq(label({ bio: 'my OnlyFans is in the links 💕' }), 'Bio mentions OnlyFans');
+  eq(label({ bio: 'Check my 𝐎𝐧𝐥𝐲𝐅𝐚𝐧𝐬 👇' }), 'Bio mentions OnlyFans', 'fancy font');
+  eq(label({ bio: 'ＯｎｌｙＦａｎｓ link below' }), 'Bio mentions OnlyFans', 'full-width');
+  eq(label({ bio: '0nlyfans 🔞 free trial' }), 'Bio mentions OnlyFans');
+  eq(label({ bio: 'fansly.com/someone' }), 'Bio mentions Fansly', 'domain without https');
+  eq(label({ bio: 'Only fans of jazz and good coffee here' }), null, '"only fans" with a space is ordinary English');
+  eq(label({ bio: 'Software engineer. Fan of only the best tacos.' }), null);
+  eq(bioSite('I stream on chaturbate')?.name, 'Chaturbate');
+});
+
+await test('link-in-bio pages only count on NSFW profiles', () => {
+  eq(label({ nsfw: true, links: ['https://linktr.ee/someone'] }), 'NSFW profile linking to Linktree');
+  eq(label({ nsfw: true, bio: 'all my links: allmylinks.com/someone' }), 'NSFW profile linking to AllMyLinks');
+  eq(label({ nsfw: false, links: ['https://linktr.ee/someone'] }), null);
+  eq(label({ nsfw: true, links: ['https://github.com/someone'] }), null);
+});
+
+await test('brand-new NSFW or hidden-history accounts', () => {
+  eq(label({ created: daysAgo(3), nsfw: true }), 'New NSFW account, 3 days old');
+  eq(label({ created: daysAgo(0.2), nsfw: true }), 'New NSFW account, under a day old');
+  eq(label({ created: daysAgo(1), hidden: true }), 'New account with hidden posts, 1 day old');
+  eq(label({ created: daysAgo(NEW_ACCOUNT_DAYS + 1), nsfw: true }), null, 'not new any more');
+  eq(label({ created: daysAgo(2) }), null, 'new but SFW and open');
+  eq(label({ created: daysAgo(2), nsfw: true }, { adultLinks: true, newAccounts: false }), null, 'can be turned off');
+  eq(label({ nsfw: true, hidden: true }), null, 'unknown age');
+});
+
+await test('profile facts are sanitized', () => {
+  eq(sanitizeProfile(null), null);
+  const links = ['https://github.com/someone', 'https://onlyfans.com/a', 'https://onlyfans.com/a', 42, 'https://linktr.ee/a'];
+  const p = sanitizeProfile({ created: 'yesterday', nsfw: 'yes', links, bio: 'x'.repeat(2000) });
+  eq([p.created, p.nsfw, p.links, p.bio.length], [null, false, ['https://onlyfans.com/a', 'https://linktr.ee/a'], 300], 'keeps only links the rules know');
+  eq(profileVerdict(null, ON).blocked, false);
+  eq(matchSite(['https://modelhub.com/someone'], ADULT_SITES)?.name, 'Pornhub');
+});
+
+await test('Reddit skips the filters that would flag ordinary forum posts', () => {
+  const base = { strictness: 'balanced', categories: {} };
+  const caption = localSignals({ platform: 'reddit', text: 'So, who actually buys these. Seriously, is it you' });
+  const essay = localSignals({ platform: 'reddit', text: 'word '.repeat(25) });
+  const ids = (platform, local) => Object.keys(questionsFor(base, platform, local));
+  for (const q of ['withholds_payoff', 'engagement_farming', 'news_rehash', 'clickbait_hook', 'hollow_inspiration', 'personal_branding']) {
+    eq(ids('reddit', essay).includes(q), false, `${q} on Reddit`);
+    eq(ids('x', essay).includes(q), true, `${q} on X`);
+  }
+  eq(ids('reddit', caption).includes('ai_style'), false, 'no style judgment on a 10-word caption');
+  eq(ids('reddit', essay).includes('ai_style'), true);
+  eq(ids('x', caption).includes('ai_style'), true, 'X keeps judging short posts');
+  eq(ids('reddit', caption).includes('hate_speech'), true, 'toxicity still checked on captions');
+  // A cached "engagement bait" answer doesn't hide a Reddit post.
+  const bait = { engagement_farming: { type: 'noul', noul: 0.95 } };
+  eq(verdictFrom(bait, base, 'reddit', essay).hide, false);
+  eq(verdictFrom(bait, base, 'x', essay).hide, true);
+  const ai = CATEGORIES.find((c) => c.id === 'ai_generated');
+  eq([categoryApplies(ai, 'reddit', { words: 19 }), categoryApplies(ai, 'reddit', { words: 20 }), categoryApplies(ai, 'reddit')], [false, true, true]);
+});
+
+await test('one switch for every site, with per-site overrides', () => {
+  const s = structuredClone(DEFAULT_SETTINGS);
+  const essay = { words: 40 };
+  const asks = (platform, q) => Object.keys(questionsFor(s, platform, essay)).includes(q);
+  const cat = (id) => CATEGORIES.find((c) => c.id === id);
+  eq(['x', 'linkedin', 'reddit'].map((p) => asks(p, 'engagement_farming')), [true, true, false], 'Reddit starts with engagement bait off');
+  s.categories.politics = true;
+  eq(['x', 'linkedin', 'reddit'].map((p) => asks(p, 'politics')), [true, true, true], 'one switch turns it on everywhere');
+  s.siteOverrides.linkedin.politics = false;
+  eq(['x', 'linkedin', 'reddit'].map((p) => asks(p, 'politics')), [true, false, true], 'an override wins');
+  s.categories.politics = false;
+  s.siteOverrides.x.politics = true;
+  eq(['x', 'linkedin', 'reddit'].map((p) => asks(p, 'politics')), [true, false, false], 'overrides stay when the switch changes');
+  s.siteOverrides.reddit.engagement_bait = null;
+  eq(asks('reddit', 'engagement_farming'), true, '"Same as all" follows the switch, over the built-in default');
+  eq([siteOverride(s, cat('engagement_bait'), 'reddit'), siteOverride(s, cat('news_rehash'), 'reddit'), siteOverride(s, cat('politics'), 'x')], [null, false, true]);
+  const politics = { politics: { type: 'noul', noul: 0.95 } };
+  eq([verdictFrom(politics, s, 'x', essay).hide, verdictFrom(politics, s, 'linkedin', essay).hide], [true, false], 'a cached answer only counts where the filter is on');
+});
+
+await test('each site can have its own strictness', () => {
+  const s = structuredClone(DEFAULT_SETTINGS);
+  s.siteStrictness.reddit = 'strict';
+  const hate = { hate_speech: { type: 'noul', noul: 0.7 } };
+  eq([verdictFrom(hate, s, 'x').hide, verdictFrom(hate, s, 'reddit').hide], [false, true], 'Balanced on X, Strict on Reddit');
+  s.strictness = 'strict';
+  s.siteStrictness.reddit = 'relaxed';
+  eq([verdictFrom(hate, s, 'x').hide, verdictFrom(hate, s, 'reddit').hide], [true, false], 'the default changes, the override stays');
+});
+
+await test('custom rules can be limited to some sites', () => {
+  const s = { ...structuredClone(DEFAULT_SETTINGS), customRules: ['Politics', 'Crypto'], customRuleSites: { Politics: ['x', 'linkedin'] } };
+  const id = customRuleId('Politics');
+  eq([id in questionsFor(s, 'x'), id in questionsFor(s, 'reddit'), customRuleId('Crypto') in questionsFor(s, 'reddit')], [true, false, true]);
+  const answers = { [id]: { type: 'noul', noul: 0.95 } };
+  eq([verdictFrom(answers, s, 'linkedin').hide, verdictFrom(answers, s, 'reddit').hide], [true, false]);
+  eq(id in questionsFor(s), true, 'no site (the harness): every rule');
+});
+
+await test('per-site switches from pre-release 0.3 become a switch and overrides', () => {
+  const m = migrateSettings({
+    filters: { x: { politics: true, engagement_bait: true }, linkedin: { politics: true, engagement_bait: true }, reddit: { politics: false, engagement_bait: true } },
+    strictness: 'strict',
+  });
+  eq('filters' in m, false);
+  eq([m.categories.politics, m.siteOverrides.reddit.politics, m.siteOverrides.x.politics], [true, false, undefined]);
+  eq([m.categories.engagement_bait, m.siteOverrides.reddit.engagement_bait], [true, null], 'Reddit turned on: follows the switch');
+  eq(m.categories.news_rehash, true);
+  eq(m.strictness, 'strict');
+  const old = { categories: { politics: true } };
+  eq(migrateSettings(old), old, '0.2 settings need nothing: categories are the switches');
+});
+
+await test('Reddit posts in the model state, and focus on Reddit', () => {
+  const s = buildState({ platform: 'reddit', kind: 'comment', community: 'r/AskReddit', author: { handle: 'u/someone' }, text: 'great question' });
+  eq([s.platform, s.post.community, s.post.kind, s.post.author.handle], ['Reddit', 'r/AskReddit', 'comment', 'u/someone']);
+  const focus = { enabled: true, interests: ['AI'], strength: 'balanced', onX: true, onLinkedIn: true, onReddit: false };
+  eq(focusActive({ focus }, 'reddit'), false, 'off on Reddit');
+  eq(focusActive({ focus: { ...focus, onReddit: true } }, 'reddit'), true);
 });
 
 const out = document.getElementById('out');

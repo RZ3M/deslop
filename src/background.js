@@ -15,12 +15,15 @@ import { locationQuestion, NO_COUNTRY, COUNTRY_CHOICE_MIN } from './lib/question
 import { loadSettings, getApiKey, setApiKey, getBackend } from './lib/settings.js';
 import { PersistentCache } from './lib/cache.js';
 import { matchPlace, isBlockedPlace, getCountry, placeLabel } from './lib/countries.js';
+import { profileVerdict, sanitizeProfile } from './lib/profiles.js';
 
 // Answers are cached per post and per question (see missingQuestions), so
 // enabling a category later only asks that category's questions.
 const answersCache = new PersistentCache('cache:answers:v2', { maxEntries: 6000, ttlMs: 14 * 24 * 3600e3 });
 const geoCache = new PersistentCache('cache:geo', { maxEntries: 20000, ttlMs: 45 * 24 * 3600e3 });
 const geoModelCache = new PersistentCache('cache:geoModel', { maxEntries: 5000, ttlMs: 45 * 24 * 3600e3 });
+// Reddit profiles change more often than locations (bots add links, get banned).
+const profileCache = new PersistentCache('cache:profiles', { maxEntries: 8000, ttlMs: 14 * 24 * 3600e3 });
 
 const limit = createLimiter(6);
 const inflight = new Map();
@@ -41,11 +44,14 @@ const handlers = {
   classify: ({ post }) => classify(post),
   'geo:get': ({ platform, key }) => geoGet(platform, key),
   'geo:put': ({ platform, key, raw }) => geoPut(platform, key, raw),
+  'profile:get': ({ platform, key }) => profileGet(platform, key),
+  'profile:put': ({ platform, key, raw }) => profilePut(platform, key, raw),
   hidden: ({ entry }) => recordHidden(entry),
   'stats:get': () => getStats(),
   'model:test': ({ settings }) => testModel(settings),
+  'history:clear': () => updateStats((s) => (s.days = {})),
   'cache:clear': async () => {
-    await Promise.all([answersCache.clear(), geoCache.clear(), geoModelCache.clear()]);
+    await Promise.all([answersCache.clear(), geoCache.clear(), geoModelCache.clear(), profileCache.clear()]);
     return { ok: true };
   },
 };
@@ -62,8 +68,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 // ── Slop classification ─────────────────────────────────────────────────────
 
 async function classify(post) {
-  const settings = await getSettings();
+  let settings = await getSettings();
   if (!settings.enabled || !settings.platforms[post.platform]) return { hide: false, skipped: 'disabled' };
+  // Focus mode judges what a post is about. A comment is about its thread, so
+  // Focus leaves comments alone.
+  if (post.kind === 'comment') settings = { ...settings, focus: { ...settings.focus, enabled: false } };
 
   if (isAllowlisted(post, settings.allowlist)) return { hide: false, skipped: 'allowlisted' };
 
@@ -79,7 +88,7 @@ async function classify(post) {
 
   if (!hasEnoughText(post)) return { hide: false, skipped: 'too-short' };
 
-  const questions = questionsFor(settings, post.platform);
+  const questions = questionsFor(settings, post.platform, local);
   if (!Object.keys(questions).length) return { hide: false, skipped: 'nothing-enabled' };
 
   const backend = await getBackend(settings);
@@ -104,7 +113,7 @@ async function classify(post) {
           // Re-read: another job for the same post may have finished meanwhile.
           const merged = mergeAnswers(await answersCache.get(cacheKey), missing, res.answers);
           await answersCache.set(cacheKey, merged);
-          await recordUsage(res.usage);
+          await recordUsage(res.usage, post.platform);
           return merged;
         })
         .finally(() => inflight.delete(jobKey));
@@ -126,12 +135,13 @@ function verdict(reasons) {
   return { hide: reasons.length > 0, reasons };
 }
 
+// "@handle" on X, a profile slug on LinkedIn, "u/name" on Reddit.
+const accountId = (s) => s.toLowerCase().trim().replace(/^@|^\/?u\//, '');
+
 function isAllowlisted(post, allowlist = []) {
   if (!allowlist.length) return false;
-  const ids = [post.author?.handle, post.author?.slug, post.author?.name]
-    .filter(Boolean)
-    .map((s) => s.toLowerCase().replace(/^@/, ''));
-  return allowlist.some((a) => ids.includes(a.toLowerCase().trim().replace(/^@/, '')));
+  const ids = [post.author?.handle, post.author?.slug, post.author?.name].filter(Boolean).map(accountId);
+  return allowlist.some((a) => ids.includes(accountId(a)));
 }
 
 // ── Country filter ──────────────────────────────────────────────────────────
@@ -190,6 +200,27 @@ async function placeFromModel(raw, blocked) {
   }
 }
 
+// ── Reddit profiles ─────────────────────────────────────────────────────────
+// Content scripts look up the raw facts (links, bio, NSFW flag, age); the
+// verdict is worked out here under the current settings, so changing them
+// never needs another lookup.
+
+async function profileGet(platform, key) {
+  const entry = await profileCache.get(`${platform}:${key}`);
+  if (!entry) return { hit: false };
+  return { hit: true, ...(await profileResult(entry.raw)) };
+}
+
+async function profilePut(platform, key, raw) {
+  const clean = sanitizeProfile(raw);
+  await profileCache.set(`${platform}:${key}`, { raw: clean });
+  return profileResult(clean);
+}
+
+async function profileResult(raw) {
+  return profileVerdict(raw, (await getSettings()).reddit);
+}
+
 function describeCode(code) {
   const c = getCountry(code);
   return c ? { kind: 'country', code: c.code, name: c.name, flag: c.flag } : null;
@@ -200,11 +231,25 @@ function describeCode(code) {
 // The local date, so "today" and the spending cap reset at the user's midnight.
 const today = () => new Date().toLocaleDateString('en-CA');
 
+// With "Keep a history" on (it's off unless the user turns it on), `days`
+// keeps counts for the charts in settings: per local day, posts hidden by site
+// and reason, posts checked by site, and spend. Counts only: no post text,
+// authors or links.
+const HISTORY_DAYS = 90;
+
 async function readStats() {
   const { stats } = await chrome.storage.local.get('stats');
   const s = stats || { day: today(), hiddenToday: 0, hiddenTotal: 0, byReason: {}, spendToday: 0, spendTotal: 0, checksToday: 0 };
   if (s.day !== today()) Object.assign(s, { day: today(), hiddenToday: 0, byReason: {}, spendToday: 0, checksToday: 0 });
+  s.days ||= {};
   return s;
+}
+
+function dayStats(s) {
+  const day = (s.days[today()] ||= { hidden: {}, checks: {}, spend: 0 });
+  const oldest = new Date(Date.now() - HISTORY_DAYS * 24 * 3600e3).toLocaleDateString('en-CA');
+  for (const d of Object.keys(s.days)) if (d < oldest) delete s.days[d];
+  return day;
 }
 
 let statsQueue = Promise.resolve();
@@ -228,22 +273,31 @@ async function overCap(settings, backend) {
   return cap !== null && (await readStats()).spendToday >= cap;
 }
 
-async function recordUsage(usage) {
+async function recordUsage(usage, platform) {
   const cost = usage?.cost || 0;
+  const { keepHistory } = await getSettings();
   await updateStats((s) => {
     s.spendToday += cost;
     s.spendTotal += cost;
     s.checksToday += 1;
+    if (!keepHistory) return;
+    const day = dayStats(s);
+    day.spend += cost;
+    if (platform) day.checks[platform] = (day.checks[platform] || 0) + 1;
   });
   await chrome.storage.local.remove('lastError');
 }
 
 async function recordHidden(entry) {
+  const { keepHistory } = await getSettings();
   await updateStats((s) => {
     s.hiddenToday += 1;
     s.hiddenTotal += 1;
     const id = entry.reasonId || 'other';
     s.byReason[id] = (s.byReason[id] || 0) + 1;
+    if (!keepHistory) return;
+    const site = (dayStats(s).hidden[entry.platform || 'other'] ||= {});
+    site[id] = (site[id] || 0) + 1;
   });
   const { recent = [] } = await chrome.storage.local.get('recent');
   recent.unshift({ ...entry, at: Date.now() });
@@ -268,7 +322,7 @@ async function getStats() {
     lastError,
     ready: Boolean(backend),
     cap: capFor(settings, backend),
-    cached: { posts: await answersCache.size(), accounts: await geoCache.size() },
+    cached: { posts: await answersCache.size(), accounts: (await geoCache.size()) + (await profileCache.size()) },
   };
 }
 

@@ -8,213 +8,268 @@
   <link rel="stylesheet" href="options.css">
 </head>
 <body>
-  <main>
-    <header class="page-head">
-      <img class="logo big" src="../../icons/icon128.png" alt="">
-      <div>
-        <h1>Deslop</h1>
-        <p class="muted">Hides engagement bait, AI slop, hate, recycled news and posts from countries you pick on X and LinkedIn, in any language.
-          Every post is judged by a decision model that answers typed questions with calibrated probabilities: <a href="https://openrouter.ai/~typesafe/jev-latest" target="_blank" rel="noopener">Jev</a> by default, another model on OpenRouter, or one you host yourself.</p>
+  <div class="shell">
+    <aside class="side">
+      <div class="brand">
+        <img class="logo" src="../../icons/icon48.png" alt="">
+        <strong>Deslop</strong>
+        <span id="saved" class="saved" aria-live="polite"></span>
       </div>
-      <span id="saved" class="saved" aria-live="polite"></span>
-    </header>
+      <nav class="nav" aria-label="Settings">
+        <a href="#filters">Filters</a>
+        <a href="#rules">Your rules</a>
+        <a href="#focus">Focus</a>
+        <a href="#accounts">Accounts</a>
+        <a href="#behaviour">Behaviour</a>
+        <a href="#model">Model</a>
+        <a href="#data">Data</a>
+      </nav>
+    </aside>
 
-    <section class="card">
-      <h2>Model</h2>
-      <div class="segmented wide" id="provider" role="group" aria-label="Where posts are checked">
-        <button type="button" data-value="openrouter">OpenRouter</button>
-        <button type="button" data-value="server">Your own server</button>
-      </div>
+    <main>
+      <!-- Filters: one switch per filter for every site, and per-site overrides. -->
+      <section class="section" data-section="filters" aria-labelledby="h-filters">
+        <header class="section-head">
+          <h1 id="h-filters">Filters</h1>
+          <p class="muted">Each switch turns a filter on or off on every site. To make one site different, open <b>Per site</b> next to it. Every filter works in any language, and filters that are off cost nothing.</p>
+        </header>
+        <div class="sites" id="sites" role="group" aria-label="Sites Deslop filters"></div>
+        <div id="filterList" class="settings-list"></div>
+        <p class="foot-note"><button class="link-btn" id="resetFilters" type="button">Reset filters and strictness to the defaults</button></p>
+      </section>
 
-      <div id="openrouterPanel" class="panel">
-        <p class="muted">Connect your OpenRouter account and Deslop gets a key of its own, named "Deslop", which you can see or revoke in your
-          <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">OpenRouter keys</a>. OpenRouter's page also lets you give that key a credit limit. Or paste a key you already have.
-          The key is stored only in this browser and sent only to openrouter.ai.</p>
-        <div class="key-row">
-          <button class="btn primary" id="connect" type="button">Connect OpenRouter</button>
-        </div>
-        <div class="key-row">
-          <input type="password" id="apiKey" placeholder="or paste a key: sk-or-v1-…" autocomplete="off" spellcheck="false" aria-label="OpenRouter API key">
-          <button class="btn" type="button" data-reveal="apiKey">Show</button>
-        </div>
-        <label class="field">Decision model
-          <select id="modelSelect"></select>
-        </label>
-        <input type="text" id="modelOther" placeholder="maker/model-id" spellcheck="false" aria-label="OpenRouter model ID" hidden>
-        <p class="muted small" id="modelHelp"></p>
-        <div class="cap">
-          <label class="toggle">
-            <span class="switch"><input type="checkbox" id="capEnabled"><span></span></span>
-            <span><b>Daily spending cap</b><small>Once today's OpenRouter spend reaches this, Deslop stops checking posts until midnight. Muted words, promoted posts and countries already looked up still work.</small></span>
-          </label>
-          <label class="cap-amount">$ <input type="number" id="capAmount" min="0.01" step="0.05" inputmode="decimal" aria-label="Daily spending cap in US dollars"> per day</label>
-          <p class="muted small" id="capHelp"></p>
-        </div>
-      </div>
+      <section class="section" data-section="rules" aria-labelledby="h-rules" hidden>
+        <header class="section-head">
+          <h1 id="h-rules">Your rules</h1>
+          <p class="muted">Describe anything else you never want to see. Rules match on meaning, in any language: <em>Canada</em> also catches posts about Canadians, Toronto or 加拿大, and <em>Mentions Canada</em> catches passing mentions too. Pick the sites each rule applies on.</p>
+        </header>
+        <ul id="rules" class="rules"></ul>
+        <form id="addRule" class="add-row">
+          <input type="text" id="newRule" placeholder="e.g. Crypto or memecoin promotion" maxlength="200">
+          <button class="btn" type="submit">Add rule</button>
+        </form>
 
-      <div id="serverPanel" class="panel" hidden>
-        <p class="muted">Any server that speaks the System One API, for example <a href="https://pypi.org/project/laya/" target="_blank" rel="noopener">Laya</a>
-          (<code>laya-serve</code>, or Unsloth Studio with Settings → API → Decision API turned on), LocalAI, Ollama 0.35+ or SGLang. Posts go only to this address.</p>
         <div class="two-col">
-          <label class="field">Server address
-            <input type="text" id="serverUrl" placeholder="http://localhost:8000" spellcheck="false" autocomplete="off">
+          <label class="field">Muted words
+            <textarea id="mutedWords" rows="6" placeholder="One per line, any language. Hidden instantly on every site, without asking the model."></textarea>
+            <small class="muted">Forms count: <code>canadian</code> also mutes <em>canadians</em>. Use <code>crypto*</code> for any word starting with crypto, or <code>"ai"</code> in quotes for the exact word.</small>
           </label>
-          <label class="field">Model
-            <input type="text" id="serverModel" placeholder="laya" spellcheck="false" autocomplete="off">
+          <label class="field">Never hide these accounts
+            <textarea id="allowlist" rows="6" placeholder="One per line: @handle on X, the profile slug from linkedin.com/in/slug, or u/name on Reddit"></textarea>
           </label>
         </div>
-        <label class="field"><span>API key <span class="muted small">(optional, most local servers don't need one)</span></span>
-          <span class="key-row">
-            <input type="password" id="serverKey" autocomplete="off" spellcheck="false">
-            <button class="btn" type="button" data-reveal="serverKey">Show</button>
-          </span>
-        </label>
-        <p class="muted small">Self-hosted models are free, but strictness is tuned for Jev, and small models such as Laya are much less decisive on Deslop's questions: they may hide little at Balanced and too much at Strict.</p>
-      </div>
+      </section>
 
-      <div class="key-row">
-        <button class="btn" id="testModel" type="button">Save &amp; test</button>
-      </div>
-      <p id="testStatus" class="status" aria-live="polite"></p>
-    </section>
+      <section class="section" data-section="focus" aria-labelledby="h-focus" hidden>
+        <header class="section-head">
+          <h1 id="h-focus">Focus</h1>
+          <p class="muted">List what you want your feed to be about, and Deslop hides posts that aren't about any of it. Turn on <em>Tell X you're not interested</em> in Behaviour too, and every off-topic post also nudges X's For You towards these interests.</p>
+        </header>
+        <label class="toggle">
+          <span class="switch"><input type="checkbox" id="focusEnabled"><span></span></span>
+          <span><b>Focus mode</b><small>Hide posts outside your interests. Accounts on your "Never hide" list are always shown.</small></span>
+        </label>
+        <ul id="interests" class="rules"></ul>
+        <form id="addInterest" class="add-row">
+          <input type="text" id="newInterest" placeholder="e.g. AI and LLMs, startups, tech news" maxlength="120">
+          <button class="btn" type="submit">Add interest</button>
+        </form>
+        <div class="row">
+          <b>How hard</b>
+          <div class="segmented" id="focusStrength" role="group" aria-label="How hard Focus filters">
+            <button type="button" data-value="light">Light</button>
+            <button type="button" data-value="balanced">Balanced</button>
+            <button type="button" data-value="strong">Strong</button>
+          </div>
+        </div>
+        <p class="muted small" id="focusHelp"></p>
+        <div class="row">
+          <b>Apply on</b>
+          <div class="site-chips" id="focusSites" role="group" aria-label="Sites Focus applies on"></div>
+        </div>
+        <p class="muted small">On Reddit, Focus checks posts, not comments: comments are about their thread.</p>
+      </section>
 
-    <section class="card">
-      <h2>What to hide</h2>
-      <p class="muted">Every filter works on posts in any language. Only the filters you turn on are checked, so extra filters only cost when they're on.</p>
-      <div id="categories" class="categories"></div>
+      <section class="section" data-section="accounts" aria-labelledby="h-accounts" hidden>
+        <header class="section-head">
+          <h1 id="h-accounts">Accounts</h1>
+          <p class="muted">Filters about who posted rather than what they wrote. They're decided in code from the author's profile and never ask the model.</p>
+        </header>
 
-      <h3>Strictness</h3>
-      <div class="segmented wide" id="strictness">
-        <button data-value="relaxed">Relaxed</button>
-        <button data-value="balanced">Balanced</button>
-        <button data-value="strict">Strict</button>
-      </div>
-      <p class="muted small" id="strictnessHelp"></p>
+        <h2>Reddit porn bots</h2>
+        <p class="muted">Reddit's porn bots are brand-new accounts that hide their history and post harmless-looking questions to get people onto their profile, which links to OnlyFans or similar.</p>
+        <div class="toggles">
+          <label class="toggle">
+            <span class="switch"><input type="checkbox" id="redditAdultLinks"><span></span></span>
+            <span><b>Hide OnlyFans &amp; porn-bot accounts</b><small>Posts by accounts whose profile links to OnlyFans, Fansly, Fanvue, cam sites or another adult platform, or names one in its bio. A profile marked NSFW that links to a Linktree-style page counts too.</small></span>
+          </label>
+          <label class="toggle">
+            <span class="switch"><input type="checkbox" id="redditNewAccounts"><span></span></span>
+            <span><b>Hide brand-new NSFW accounts</b><small>Accounts under 30 days old whose profile is marked NSFW or hides its posts and comments.</small></span>
+          </label>
+          <label class="toggle">
+            <span class="switch"><input type="checkbox" id="redditCheckCommenters"><span></span></span>
+            <span><b>Check commenters' profiles too</b><small>Run the two checks above on comment authors as well. Busy threads mean many more profile lookups.</small></span>
+          </label>
+        </div>
+        <p class="muted small">Deslop reads each author's profile once from your Reddit tab, with your own session, then remembers it for two weeks. Lookups are spaced out, capped at 1,000 profiles a day, and pause whenever Reddit asks Deslop to slow down.</p>
 
-      <h3>Behaviour</h3>
-      <div class="toggles">
+        <h2>Countries</h2>
+        <p class="muted">Hide posts from accounts based in these countries or regions. On X this uses the <em>Account based in</em> line from each account's About page; on LinkedIn, the location on the author's profile. Reddit doesn't show where accounts are based.</p>
+        <div id="blockedChips" class="chips"></div>
+        <input type="search" id="countrySearch" placeholder="Search countries and regions…" autocomplete="off">
+        <ul id="countryList" class="country-list" role="listbox" aria-label="Countries and regions"></ul>
+        <div class="row">
+          <b>Apply on</b>
+          <div class="site-chips" id="countrySites" role="group" aria-label="Sites the country filter applies on"></div>
+        </div>
+        <p class="muted small">X allows about 50 lookups per 15 minutes, so a brand-new feed fills in gradually; each account is cached for 45 days. LinkedIn locations are read from profile pages, at most 300 a day. <strong>LinkedIn may count this as a profile view:</strong> switch LinkedIn's profile viewing mode to private if you don't want to appear in "Who viewed your profile".</p>
         <label class="toggle">
-          <span class="switch"><input type="checkbox" id="platform-x"><span></span></span>
-          <span><b>Filter X</b><small>x.com timelines, replies and search</small></span>
+          <span class="switch"><input type="checkbox" id="includeRegions"><span></span></span>
+          <span><b>Also hide region-only accounts</b><small>Some X accounts only show a region such as "South Asia". Hide them if that region contains a country you blocked.</small></span>
         </label>
-        <label class="toggle">
-          <span class="switch"><input type="checkbox" id="platform-linkedin"><span></span></span>
-          <span><b>Filter LinkedIn</b><small>Your LinkedIn home feed</small></span>
-        </label>
-        <label class="toggle">
-          <span class="switch"><input type="checkbox" id="hideWhileChecking"><span></span></span>
-          <span><b>Blur posts while they're checked</b><small>Stops slop from flashing on screen (usually under half a second)</small></span>
-        </label>
-        <label class="toggle">
-          <span class="switch"><input type="checkbox" id="collapse"><span></span></span>
-          <span><b>Leave a placeholder</b><small>Show a thin "Deslop hid a post" bar with a Show button instead of removing posts completely</small></span>
-        </label>
-        <label class="toggle">
-          <span class="switch"><input type="checkbox" id="hidePromoted"><span></span></span>
-          <span><b>Hide promoted posts</b><small>Ads marked "Ad" or "Promoted", in any interface language</small></span>
-        </label>
+      </section>
+
+      <section class="section" data-section="behaviour" aria-labelledby="h-behaviour" hidden>
+        <header class="section-head">
+          <h1 id="h-behaviour">Behaviour</h1>
+          <p class="muted">How hidden posts look, and what else Deslop does on each site. Turn whole sites on or off at the top of their column in Filters.</p>
+        </header>
+        <div class="toggles">
+          <label class="toggle">
+            <span class="switch"><input type="checkbox" id="collapse"><span></span></span>
+            <span><b>Leave a placeholder</b><small>Show a thin "Deslop hid a post" bar with a Show button instead of removing posts completely</small></span>
+          </label>
+          <label class="toggle">
+            <span class="switch"><input type="checkbox" id="hideWhileChecking"><span></span></span>
+            <span><b>Blur posts while they're checked</b><small>Stops slop from flashing on screen (usually under half a second)</small></span>
+          </label>
+          <label class="toggle">
+            <span class="switch"><input type="checkbox" id="hidePromoted"><span></span></span>
+            <span><b>Hide promoted posts</b><small>Ads marked "Ad" or "Promoted", in any interface language</small></span>
+          </label>
+        </div>
+        <h2>X</h2>
         <label class="toggle">
           <span class="switch"><input type="checkbox" id="notInterestedOnX"><span></span></span>
           <span><b>Tell X you're not interested</b><small>For every post Deslop hides on X, open its ⋯ menu and pick "Not interested in this post", so For You shows you less like it.
             The menu stays invisible while this happens. The option only exists on For You; elsewhere the menu is closed without clicking anything.</small></span>
         </label>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Focus your feed</h2>
-      <p class="muted">List what you want your feed to be about, and Deslop hides posts that aren't about any of it.
-        Turn on <em>Tell X you're not interested</em> too, and every off-topic post also nudges X's For You towards these interests.</p>
-      <div class="toggles">
+        <h2>Reddit</h2>
         <label class="toggle">
-          <span class="switch"><input type="checkbox" id="focusEnabled"><span></span></span>
-          <span><b>Focus mode</b><small>Hide posts outside your interests. Accounts on your "Never hide" list are always shown.</small></span>
+          <span class="switch"><input type="checkbox" id="redditComments"><span></span></span>
+          <span><b>Filter comments</b><small>Check comments with the same filters as Reddit posts. A hidden comment's replies stay visible. Each comment checked costs the same as a post.</small></span>
         </label>
-      </div>
-      <ul id="interests" class="rules"></ul>
-      <form id="addInterest" class="add-row">
-        <input type="text" id="newInterest" placeholder="e.g. AI and LLMs, startups, tech news" maxlength="120">
-        <button class="btn" type="submit">Add interest</button>
-      </form>
-      <div class="segmented wide" id="focusStrength">
-        <button data-value="light">Light</button>
-        <button data-value="balanced">Balanced</button>
-        <button data-value="strong">Strong</button>
-      </div>
-      <p class="muted small" id="focusHelp"></p>
-      <div class="toggles">
-        <label class="toggle">
-          <span class="switch"><input type="checkbox" id="focusOnX"><span></span></span>
-          <span><b>Apply on X</b><small>Timelines, replies and search</small></span>
-        </label>
-        <label class="toggle">
-          <span class="switch"><input type="checkbox" id="focusOnLinkedIn"><span></span></span>
-          <span><b>Apply on LinkedIn</b><small>Your LinkedIn home feed</small></span>
-        </label>
-      </div>
-    </section>
+      </section>
 
-    <section class="card">
-      <h2>Your own rules</h2>
-      <p class="muted">Describe anything else you never want to see. Rules match on meaning, in any language: <em>Canada</em> also catches posts about Canadians, Toronto or 加拿大, and <em>Mentions Canada</em> catches passing mentions too.</p>
-      <ul id="rules" class="rules"></ul>
-      <form id="addRule" class="add-row">
-        <input type="text" id="newRule" placeholder="e.g. Crypto or memecoin promotion" maxlength="200">
-        <button class="btn" type="submit">Add rule</button>
-      </form>
+      <section class="section" data-section="model" aria-labelledby="h-model" hidden>
+        <header class="section-head">
+          <h1 id="h-model">Model</h1>
+          <p class="muted">Every post is judged by a decision model that answers typed questions with calibrated probabilities: <a href="https://openrouter.ai/~typesafe/jev-latest" target="_blank" rel="noopener">Jev</a> by default, another model on OpenRouter, or one you host yourself.</p>
+        </header>
+        <div class="segmented wide" id="provider" role="group" aria-label="Where posts are checked">
+          <button type="button" data-value="openrouter">OpenRouter</button>
+          <button type="button" data-value="server">Your own server</button>
+        </div>
 
-      <div class="two-col">
-        <label class="field">Muted words
-          <textarea id="mutedWords" rows="4" placeholder="One per line, any language. Hidden instantly, without asking the model."></textarea>
-          <small class="muted">Forms count: <code>canadian</code> also mutes <em>canadians</em>. Use <code>crypto*</code> for any word starting with crypto, or <code>"ai"</code> in quotes for the exact word.</small>
+        <div id="openrouterPanel" class="panel">
+          <p class="muted">Connect your OpenRouter account and Deslop gets a key of its own, named "Deslop", which you can see or revoke in your
+            <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">OpenRouter keys</a>. OpenRouter's page also lets you give that key a credit limit. Or paste a key you already have.
+            The key is stored only in this browser and sent only to openrouter.ai.</p>
+          <div class="key-row">
+            <button class="btn primary" id="connect" type="button">Connect OpenRouter</button>
+          </div>
+          <div class="key-row">
+            <input type="password" id="apiKey" placeholder="or paste a key: sk-or-v1-…" autocomplete="off" spellcheck="false" aria-label="OpenRouter API key">
+            <button class="btn" type="button" data-reveal="apiKey">Show</button>
+          </div>
+          <label class="field">Decision model
+            <select id="modelSelect"></select>
+          </label>
+          <input type="text" id="modelOther" placeholder="maker/model-id" spellcheck="false" aria-label="OpenRouter model ID" hidden>
+          <p class="muted small" id="modelHelp"></p>
+          <div class="cap">
+            <label class="toggle">
+              <span class="switch"><input type="checkbox" id="capEnabled"><span></span></span>
+              <span><b>Daily spending cap</b><small>Once today's OpenRouter spend reaches this, Deslop stops checking posts until midnight. Muted words, promoted posts and countries already looked up still work.</small></span>
+            </label>
+            <label class="cap-amount">$ <input type="number" id="capAmount" min="0.01" step="0.05" inputmode="decimal" aria-label="Daily spending cap in US dollars"> per day</label>
+            <p class="muted small" id="capHelp"></p>
+          </div>
+        </div>
+
+        <div id="serverPanel" class="panel" hidden>
+          <p class="muted">Any server that speaks the System One API, for example <a href="https://pypi.org/project/laya/" target="_blank" rel="noopener">Laya</a>
+            (<code>laya-serve</code>, or Unsloth Studio with Settings → API → Decision API turned on), LocalAI, Ollama 0.35+ or SGLang. Posts go only to this address.</p>
+          <div class="two-col">
+            <label class="field">Server address
+              <input type="text" id="serverUrl" placeholder="http://localhost:8000" spellcheck="false" autocomplete="off">
+            </label>
+            <label class="field">Model
+              <input type="text" id="serverModel" placeholder="laya" spellcheck="false" autocomplete="off">
+            </label>
+          </div>
+          <label class="field"><span>API key <span class="muted small">(optional, most local servers don't need one)</span></span>
+            <span class="key-row">
+              <input type="password" id="serverKey" autocomplete="off" spellcheck="false">
+              <button class="btn" type="button" data-reveal="serverKey">Show</button>
+            </span>
+          </label>
+          <p class="muted small">Self-hosted models are free, but strictness is tuned for Jev, and small models such as Laya are much less decisive on Deslop's questions: they may hide little at Balanced and too much at Strict.</p>
+        </div>
+
+        <div class="key-row">
+          <button class="btn" id="testModel" type="button">Save &amp; test</button>
+        </div>
+        <p id="testStatus" class="status" aria-live="polite"></p>
+      </section>
+
+      <section class="section" data-section="data" aria-labelledby="h-data" hidden>
+        <header class="section-head">
+          <h1 id="h-data">Data</h1>
+          <p class="muted">What Deslop has hidden, by filter and by site. These numbers stay in your browser.</p>
+        </header>
+        <label class="toggle history-toggle">
+          <span class="switch"><input type="checkbox" id="keepHistory"><span></span></span>
+          <span><b>Keep a history</b><small>Counts the posts Deslop hides each day, by site and filter, and how many the model checked, for the charts here. Counts only: no post text, authors or links. Kept for 90 days, only in this browser. Turning it off deletes it.</small></span>
         </label>
-        <label class="field">Never hide these accounts
-          <textarea id="allowlist" rows="4" placeholder="One per line: @handle on X, or the profile slug from linkedin.com/in/slug"></textarea>
-        </label>
-      </div>
-    </section>
+        <div class="tiles" id="todayTiles"></div>
+        <p class="muted history-prompt" id="historyPrompt">Turn on <b>Keep a history</b> to see charts of what Deslop hides over time, by day, site and filter.</p>
+        <div class="history" id="historyView">
+        <div class="stats-controls">
+          <div class="segmented" id="statsRange" role="group" aria-label="Period">
+            <button type="button" data-value="7">7 days</button>
+            <button type="button" data-value="30">30 days</button>
+            <button type="button" data-value="90">90 days</button>
+          </div>
+          <div class="segmented" id="statsSite" role="group" aria-label="Site"></div>
+        </div>
+        <div class="tiles" id="statTiles"></div>
+        <figure class="chart" id="dailyChart">
+          <figcaption><b>Hidden per day</b><span class="legend" aria-hidden="true"></span></figcaption>
+          <div class="plot"></div>
+          <details class="table-view"><summary>Show as a table</summary><div></div></details>
+        </figure>
+        <figure class="chart" id="reasonChart">
+          <figcaption><b>What was hidden</b><span class="legend" aria-hidden="true"></span></figcaption>
+          <div class="plot"></div>
+          <details class="table-view"><summary>Show as a table</summary><div></div></details>
+        </figure>
+        <p class="muted small">Counted each time Deslop hides a post on a page, so a post you see again after reloading counts again. The history starts when you turn it on.</p>
+        </div>
 
-    <section class="card">
-      <h2>Block countries</h2>
-      <p class="muted">Hide posts from accounts based in these countries or regions.
-        On X this uses the <em>Account based in</em> line from each account's About page. On LinkedIn it uses the location on the author's profile.</p>
-
-      <div id="blockedChips" class="chips"></div>
-      <input type="search" id="countrySearch" placeholder="Search countries and regions…" autocomplete="off">
-      <ul id="countryList" class="country-list" role="listbox" aria-label="Countries and regions"></ul>
-
-      <div class="toggles">
-        <label class="toggle">
-          <span class="switch"><input type="checkbox" id="countriesOnX"><span></span></span>
-          <span><b>Apply on X</b><small>Looks up each new account once, then caches it for 45 days. X allows about 50 lookups per 15 minutes, so a brand-new feed fills in gradually.</small></span>
-        </label>
-        <label class="toggle">
-          <span class="switch"><input type="checkbox" id="countriesOnLinkedIn"><span></span></span>
-          <span><b>Apply on LinkedIn</b><small>Reads the location from each author's profile page (once, then cached; at most 300 per day).
-            <strong>LinkedIn may count this as a profile view.</strong> Switch LinkedIn's profile viewing mode to private if you don't want to appear in "Who viewed your profile".</small></span>
-        </label>
-        <label class="toggle">
-          <span class="switch"><input type="checkbox" id="includeRegions"><span></span></span>
-          <span><b>Also hide region-only accounts</b><small>Some X accounts only show a region such as "South Asia". Hide them if that region contains a country you blocked.</small></span>
-        </label>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Data</h2>
-      <p class="muted" id="dataInfo"></p>
-      <p class="muted small">Everything above is stored only in your browser. Deslop has no server and no analytics.
-        <a href="https://github.com/RZ3M/deslop/blob/main/PRIVACY.md" target="_blank" rel="noopener">Privacy policy</a></p>
-      <div class="add-row">
-        <button class="btn" id="clearCache" type="button">Clear cached verdicts</button>
-        <button class="btn" id="resetSettings" type="button">Reset settings</button>
-      </div>
-    </section>
-
-    <footer class="muted small">
-      Deslop is open source. <a href="https://github.com/RZ3M/deslop" target="_blank" rel="noopener">github.com/RZ3M/deslop</a>
-    </footer>
-  </main>
+        <h2>Your data</h2>
+        <p class="muted" id="dataInfo"></p>
+        <p class="muted small">Everything in these settings is stored only in your browser. Deslop has no server and no analytics.
+          <a href="https://github.com/RZ3M/deslop/blob/main/PRIVACY.md" target="_blank" rel="noopener">Privacy policy</a></p>
+        <div class="add-row">
+          <button class="btn" id="clearCache" type="button">Clear cached verdicts</button>
+          <button class="btn" id="resetSettings" type="button">Reset all settings</button>
+        </div>
+        <p class="muted small">Deslop is open source: <a href="https://github.com/RZ3M/deslop" target="_blank" rel="noopener">github.com/RZ3M/deslop</a></p>
+      </section>
+    </main>
+  </div>
   <script type="module" src="options.js"></script>
 </body>
 </html>
