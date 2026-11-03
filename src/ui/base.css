@@ -142,6 +142,11 @@ textarea {
   box-shadow: none;
 }
 
+.switch input:disabled + span {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .switch input:focus-visible + span {
   outline: 2px solid var(--accent-text);
   outline-offset: 2px;

@@ -2,8 +2,8 @@
 
 <h1 align="center">Deslop</h1>
 
-<p align="center"><b>A Chrome extension that removes slop from X and LinkedIn.</b><br>
-Engagement bait, AI-written filler, hate and abuse, recycled news, clickbait hooks, broetry and, if you want, off-topic posts or posts from countries you choose, quietly disappear from your feed, in any language.<br>
+<p align="center"><b>A Chrome extension that removes slop from X, LinkedIn and Reddit.</b><br>
+Engagement bait, AI-written filler, hate and abuse, recycled news, clickbait hooks, broetry, Reddit's OnlyFans bots and, if you want, off-topic posts or posts from countries you choose, quietly disappear from your feed, in any language.<br>
 Every post is judged by <a href="https://openrouter.ai/~typesafe/jev-latest">Jev</a>, TypeSafe's decision model, through OpenRouter, or by another decision model you pick or host yourself.</p>
 
 <p align="center">
@@ -18,7 +18,7 @@ Every post is judged by <a href="https://openrouter.ai/~typesafe/jev-latest">Jev
 
 | Group | Category | Examples | Default |
 | --- | --- | --- | --- |
-| Slop | **Engagement bait** | "The prompt is in the replies 👇", "Comment GUIDE and I'll DM you", "Link in first comment", "Like if you agree" | On |
+| Slop (some not on Reddit, see [Reddit](#reddit)) | **Engagement bait** | "The prompt is in the replies 👇", "Comment GUIDE and I'll DM you", "Link in first comment", "Like if you agree" | On |
 | | **AI-generated writing** | "In today's fast-paced landscape…", "It's not X, it's Y", emoji-bullet listicles, "Let that sink in" | On |
 | | **Recycled news** | "🚨 OpenAI just dropped… here's everything you need to know 🧵", weekly "AI news you missed" roundups | On |
 | | **Clickbait hooks** | "RIP Photoshop", "This changes everything", "99% of people don't know this" | On |
@@ -33,13 +33,31 @@ Every post is judged by <a href="https://openrouter.ai/~typesafe/jev-latest">Jev
 | Topics & selling | **Sales pitches** | "My cohort opens tomorrow, DM me IN" | Off |
 | | **Get-rich-quick & crypto pumps** | "$30k/month passive income", "this memecoin is about to 100x" | Off |
 | | **Politics** | Elections, politicians, policy fights, culture-war debates | Off |
-| | **Your own rules** | Anything you describe, e.g. *"Crypto or memecoin promotion"*. Matched on meaning: *Canada* also catches *Canadian*, *Toronto* or *加拿大* | — |
+| | **Your own rules** | Anything you describe, e.g. *"Crypto or memecoin promotion"*, on every site or only the ones you pick. Matched on meaning: *Canada* also catches *Canadian*, *Toronto* or *加拿大* | — |
 | | **Focus mode** | Everything that isn't about the interests you list (see below) | Off |
-| | **Countries / regions** | Accounts based in countries or regions you pick | — |
+| | **Countries / regions** | Accounts based in countries or regions you pick (X and LinkedIn) | — |
+| Reddit | **OnlyFans & porn-bot accounts** | Authors whose profile links to OnlyFans, Fansly, cam sites or another adult platform, or names one in their bio | On |
+| | **Brand-new NSFW accounts** | Accounts under 30 days old whose profile is marked NSFW or hides its posts | On |
 
 Plus muted words, an allowlist of accounts that are never hidden, and optional hiding of promoted posts.
 
-The hate and toxicity filters judge the whole post, **including any post it quotes**, so a two-word reaction quoting something vile is hidden too.
+### Different rules for each site
+
+Every filter has one switch that applies to X, LinkedIn and Reddit at once. To make one site different, open **Per site** next to it and set that site to *On*, *Off* or *Same as all*. The button then says which sites differ (Reddit starts with five of them, see [Reddit](#reddit)), and those overrides stay put when you flip the main switch.
+
+- **Strictness** works the same way: one level for every site, and any site can have its own (say, Strict on X and Relaxed on Reddit). The popup sets the level for every site.
+- **Your own rules** can each be limited to some sites: *Politics* on X only, for example.
+- **Focus** and the **country filter** each have their own *Apply on* sites, and each site has its own on/off switch at the top of **Filters**.
+
+Settings are split into sections (Filters, Your rules, Focus, Accounts, Behaviour, Model, Data) picked from a side menu, so each fits on a screen or two.
+
+### See what was hidden
+
+Turn on **Keep a history** in **Data** and Deslop counts the posts it hides each day, by site and filter. It's off until you turn it on, it records counts only (no post text, authors or links), it keeps 90 days in your browser only, and turning it off deletes it. Without it, Data shows today's totals.
+
+With it on, Data charts the last 7, 30 or 90 days, for every site or one: posts hidden per day, split by site, and how many each filter hid. Hover a column or bar (or use the arrow keys) for the numbers, or open the table under each chart. There are also tiles for today's count, the filter that hid the most, and how many posts the model checked and what that cost.
+
+<p align="center"><img src="docs/data.png" width="640" alt="The Data section: tiles for posts hidden, a stacked column chart of posts hidden per day by site, and bars showing how many posts each filter hid"></p>
 
 ### Fancy fonts and LinkedInfluencers
 
@@ -68,7 +86,7 @@ Muted words hide posts instantly, without asking Jev. They match whole words and
 
 ### Focus your feed
 
-List what you want your feed to be about (for example *AI and LLMs*, *Startups and tech news*), switch on **Focus mode**, and Deslop hides posts that aren't about any of it. Choose how hard it filters (Light, Balanced or Strong) and whether it applies on X, LinkedIn or both. Accounts on your allowlist are always shown.
+List what you want your feed to be about (for example *AI and LLMs*, *Startups and tech news*), switch on **Focus mode**, and Deslop hides posts that aren't about any of it. Choose how hard it filters (Light, Balanced or Strong) and which of X, LinkedIn and Reddit it applies on. Accounts on your allowlist are always shown.
 
 ### Tell X you're not interested
 
@@ -77,6 +95,28 @@ With this option on, every post Deslop hides on X also gets **⋯ → Not intere
 - The menu is made invisible while this happens, and only an item whose text matches "Not interested" (in about 40 languages) is ever clicked.
 - X only offers this item on For You. Elsewhere (Following, replies, search) the menu is closed again without clicking anything.
 - Feedback is sent one post at a time, about a second apart.
+
+### Reddit
+
+Deslop works on the current www.reddit.com: Home, Popular, communities and comment threads. The filters above apply to posts (the title and the excerpt shown in the feed) and, with **Filter comments** on (the default), to comments. A hidden comment's text is replaced by the bar and its replies stay; in remove mode the comment goes, with its replies. The post you opened, your own posts and comments, and profile pages are never filtered.
+
+Reddit is a forum, so asking the community, sharing news links and telling personal stories are what it's for. Some filters would flag ordinary posts there, so they start off on Reddit:
+
+- **Engagement bait, Recycled news, Clickbait hooks, Broetry & humblebrags and LinkedInfluencers** start off. Reddit's feed also cuts posts off mid-text, which reads like "the rest is behind a click" to the engagement questions. You can still turn any of them on for Reddit in **Filters**.
+- **AI-generated writing** is only judged on posts and comments of 20 words or more. An image's caption or a one-line reply says little about who wrote it, and image and link posts are judged on their title alone, since Deslop can't see the image.
+- **Focus mode** only applies to posts, since comments are about their thread.
+
+Hate and toxicity, rage bait, topics, your own rules, muted words and Focus still check everything, captions included.
+
+Reddit's porn bots are brand-new accounts that hide their history and post harmless-looking questions to get people onto their profile, which links to OnlyFans. Deslop spots them from the author's profile, in code, without asking Jev:
+
+- **OnlyFans & porn-bot accounts** hides posts by accounts whose profile links to OnlyFans, Fansly, Fanvue, ManyVids, a cam site or one of about 30 adult platforms, or names one in its bio (`𝐎𝐧𝐥𝐲𝐅𝐚𝐧𝐬` and `0nlyfans` included). A link-in-bio page (Linktree, AllMyLinks, Beacons…) counts only on a profile marked NSFW, since plenty of people use them.
+- **Brand-new NSFW accounts** hides posts by accounts under 30 days old whose profile is marked NSFW or hides its posts and comments.
+- **Check commenters' profiles too** (off by default) runs both checks on comment authors as well.
+
+For this, Deslop reads each author's `about.json` (account age, NSFW flag, bio) and profile page (the links people add to their profile, which Reddit only shows there) from your Reddit tab, with your own session. Lookups only run for posts that pass the slop check, are spaced out (about one profile a second), stop at 1,000 profiles a day, pause whenever Reddit's rate-limit headers or a 429 say to slow down, and are cached for 14 days. Profiles never go to the model, and Reddit doesn't show people who viewed their profile.
+
+Reddit doesn't say where accounts are based, so the country filter doesn't apply there.
 
 ## How it works
 
@@ -104,7 +144,7 @@ custom_<hash>       noul   One per custom rule: does the post fit the rule?
 focus               noul   With Focus mode on: is the post about one of your interests?
 ```
 
-The fancy-font check runs in code (`src/lib/classify.js`) before any request. The answers are combined in code (`src/lib/questions.js`). A post is hidden when any enabled category passes the threshold for your strictness level:
+The fancy-font check runs in code (`src/lib/classify.js`) before any request. The answers are combined in code (`src/lib/questions.js`). A post is hidden when any category that's on for its site passes the threshold for that site's strictness:
 
 | Strictness | Hides at | AI-writing score |
 | --- | --- | --- |
@@ -114,7 +154,7 @@ The fancy-font check runs in code (`src/lib/classify.js`) before any request. Th
 
 Raw answers are cached per post and per question for 14 days. Changing strictness or turning a category off never calls the model again; turning one on (or editing a rule or your interests) only asks that one question for posts you see again. Posts are blurred for the fraction of a second it takes to check them, so slop doesn't flash on screen.
 
-**Cost:** about **$0.0001 per post** with the original seven questions (≈2,300 input tokens at $0.042/M). Each extra filter you turn on adds one short question to the same request, so cost grows a little with every filter, and filters that are off cost nothing. Today's spend is shown in the popup.
+**Cost:** about **$0.0001 per post** with the original seven questions (≈2,300 input tokens at $0.042/M). Each extra filter you turn on adds one short question to the same request, so cost grows a little with every filter, and filters that are off cost nothing. On Reddit every comment is checked like a post, so busy threads cost more; turn off **Filter comments** to check posts only. Today's spend is shown in the popup.
 
 **Spending cap:** Deslop stops sending posts to OpenRouter for the rest of the day once today's spend reaches your cap, **$0.50 by default** (about 5,000 posts with Jev). Change it or turn it off under **Model** in settings. The day resets at your local midnight. Muted words, promoted posts and fancy fonts mixed with emojis are still hidden, because they're decided in code. The cap can be overshot by a fraction of a cent while the last few requests finish. Self-hosted servers have no cap, since they're free.
 
@@ -142,7 +182,7 @@ Answers are cached separately for each model, so switching models never mixes th
 2. Open `chrome://extensions` and switch on **Developer mode** (top right).
 3. Click **Load unpacked** and select the folder that contains `manifest.json`.
 4. The settings page opens. Click **Connect OpenRouter**, sign in to OpenRouter and click **Authorize**: OpenRouter creates a key named "Deslop" for the extension (you can give it a credit limit on that page). Or paste an [API key](https://openrouter.ai/settings/keys) you already have and click **Save & test**, or switch to **Your own server** (see [Choosing a model](#choosing-a-model)).
-5. Scroll X or LinkedIn.
+5. Scroll X, LinkedIn or Reddit.
 
 Works in Chrome, Edge, Brave, Arc and other Chromium browsers (Manifest V3, Chrome 111+).
 
@@ -156,17 +196,17 @@ pwsh scripts/import-env-key.ps1   # reads OPENROUTER_API_KEY from ./.env or ../.
 This writes `config.local.json` (gitignored). The unpacked extension imports it on first run, so you don't need to paste the key.
 </details>
 
-<p align="center"><img src="docs/options.png" width="640" alt="Deslop settings page"></p>
+<p align="center"><img src="docs/options.png" width="640" alt="Deslop settings: a side menu, on/off switches for X, LinkedIn and Reddit, and filters with one switch each and a Per site button"></p>
 
 ## Privacy
 
 The full policy is in [PRIVACY.md](PRIVACY.md). In short:
 
-- **Post text goes to OpenRouter and the model's maker** (or only to your own server, if you use one) to be classified: the author's display name and handle or headline, the post text, any quoted post, and whether it has media. Nothing else from the page is sent.
+- **Post text goes to OpenRouter and the model's maker** (or only to your own server, if you use one) to be classified: the author's display name and handle or headline, the post text, any quoted post, whether it has media and, on Reddit, its community. Nothing else from the page is sent.
 - Your **API keys** stay in `chrome.storage.local`. The OpenRouter key is only sent to `openrouter.ai`, and a server key only to your server.
 - Deslop only asks for access to your own server's host when you click **Save & test**, and only for that host.
-- Verdicts, account locations and stats are stored **locally** in your browser. There's no Deslop server, analytics or telemetry.
-- Country lookups use your own logged-in X/LinkedIn session from the tab you're browsing, just like opening the About or profile page yourself (see the LinkedIn profile-view note above).
+- Verdicts, account locations and stats are stored **locally** in your browser, and the daily history behind the charts only if you turn it on. There's no Deslop server, analytics or telemetry.
+- Country lookups and Reddit profile lookups use your own logged-in session from the tab you're browsing, just like opening the About or profile page yourself (see the LinkedIn profile-view note above). Reddit profiles are never sent to the model.
 
 ## Development
 
@@ -175,17 +215,19 @@ No build step. It's plain ES modules and Manifest V3.
 ```
 manifest.json
 src/
-  background.js          service worker: classification, caching, country resolution, stats
+  background.js          service worker: classification, caching, country resolution, Reddit profile verdicts, stats
   lib/questions.js       ★ every Jev question and threshold, in one place
   lib/classify.js        post → Jev state, answers → verdict (pure, testable)
   lib/jev.js             Decision model client: OpenRouter or a System One server (retries, concurrency limit, model list)
   lib/connect.js         Connect OpenRouter (OAuth PKCE: creates a key in the user's account)
   lib/countries.js       countries, regions, place matching
+  lib/profiles.js        Reddit profile rules: adult-platform links, bios, new NSFW accounts (pure, testable)
   lib/settings.js, cache.js
-  content/common.js      engine: scan, blur, hide/collapse, country check
+  content/common.js      engine: scan, blur, hide/collapse, country and profile checks
   content/x.js           X adapter + "Account based in" lookups
   content/x-main-world.js  learns X's current AboutAccountQuery id from x.com's own requests
   content/linkedin.js    LinkedIn adapter + profile-location lookups
+  content/reddit.js      Reddit adapter (posts, comments, ads) + author-profile lookups
   popup/, options/, ui/  extension UI
 tests/                   browser-based tests, and run.mjs to run them headlessly (see below)
 scripts/                 package.ps1, check-manifest.mjs, serve.ps1, import-env-key.ps1, make-icons.sh
@@ -208,9 +250,10 @@ pwsh scripts/serve.ps1                   # http://localhost:8787
 
 | Page | What it checks | Status |
 | --- | --- | --- |
-| `/tests/unit.html` | Place matching, blocking rules, verdict composition, custom rules, focus mode, per-question caching, fancy fonts, word counts and muted words in many scripts, limiter (offline) | 33/33 |
-| `/tests/e2e-x-offline.html` | Real `background.js` + content scripts on a mock X timeline without Jev: muted word forms, ad labels in other languages, fancy fonts, "Not interested" feedback | 16/16 |
-| `/tests/e2e-linkedin-offline.html` | Same on a mock LinkedIn feed: hidden posts don't flicker as the page changes, "Show" reveals a post and "Hide again" collapses it, in both hide modes | 19/19 |
+| `/tests/unit.html` | Place matching, blocking rules, verdict composition, custom rules, focus mode, per-question caching, fancy fonts, word counts and muted words in many scripts, Reddit profile rules, the all-sites switches and per-site overrides, per-site strictness and rules, settings migration, limiter (offline) | 53/53 |
+| `/tests/e2e-x-offline.html` | Real `background.js` + content scripts on a mock X timeline without Jev: muted word forms, ad labels in other languages, fancy fonts, "Not interested" feedback | 19/19 |
+| `/tests/e2e-linkedin-offline.html` | Same on a mock LinkedIn feed: hidden posts don't flicker as the page changes, "Show" reveals a post and "Hide again" collapses it, in both hide modes, no daily history unless it's on | 31/31 |
+| `/tests/e2e-reddit-offline.html` | Same on mock Reddit posts and comments that render through shadow DOM like Reddit's, with mock profiles: OnlyFans and Fansly links (including behind Reddit's redirect), bios, new NSFW and hidden-history accounts, comments and their replies, replies in a collapsed thread once it's expanded, ads, both hide modes, bars that line up with the post card, one lookup per profile, the opt-in daily history and deleting it | 52/52 |
 | `/tests/harness.html` | 54 labelled posts (incl. hate, quoted hate, LinkedInfluencers, 8 languages) through the live model, at each strictness | 33/33 at Balanced on the original 33; new cases not yet run |
 | `/tests/e2e-x.html` | Real `background.js` + content scripts on a mock X timeline, live Jev | 9/9 before the new cases; not yet re-run |
 | `/tests/e2e-linkedin.html` | Same for LinkedIn, including profile-location parsing and author detection | 9/9 |
@@ -236,7 +279,8 @@ If Deslop is too aggressive or too lenient on your feed, edit the wording, examp
 
 ## Known limitations
 
-- X and LinkedIn change their markup often. The adapters rely on `data-testid`s, roles and profile URLs rather than CSS classes, but a redesign can still break them.
+- X, LinkedIn and Reddit change their markup often. The adapters rely on `data-testid`s, roles, Reddit's custom elements and their attributes, and profile URLs rather than CSS classes, but a redesign can still break them.
+- Reddit: old.reddit.com and search results aren't supported. The hidden-history signal relies on the wording of Reddit's profile page, and if Reddit renders profile links only after the page loads, the OnlyFans check falls back to the bio and the NSFW-account rule.
 - X occasionally rotates the id of its `AboutAccountQuery`. Deslop learns the new one when you open any account's *About* page.
 - Windows doesn't render flag emoji, so countries show as two-letter codes there.
 - Text-only: images and videos aren't analysed. Posts with fewer than three words (counting a quoted post) are left alone, even in Focus mode.

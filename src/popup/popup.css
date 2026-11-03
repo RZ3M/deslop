@@ -122,6 +122,15 @@ header .title span {
   gap: 8px;
 }
 
+.platforms {
+  flex: 1;
+}
+
+.platforms button {
+  padding: 4px 6px;
+  font-size: 12.5px;
+}
+
 .toggles label {
   display: flex;
   align-items: center;

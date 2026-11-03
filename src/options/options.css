@@ -1,37 +1,36 @@
-main {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 32px 16px 64px;
+/* Settings: a side menu and one section at a time, so nothing is more than
+   a click and a short scroll away. */
+.shell {
   display: grid;
-  gap: 16px;
+  grid-template-columns: 196px minmax(0, 1fr);
+  gap: 28px;
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 28px 24px 64px;
+  align-items: start;
 }
 
-.page-head {
+.side {
+  position: sticky;
+  top: 28px;
+  display: grid;
+  gap: 18px;
+}
+
+.brand {
   display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  position: relative;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
 }
 
-.page-head h1 {
-  margin: 0 0 4px;
-  font-size: 26px;
-}
-
-.page-head p {
-  margin: 0;
-}
-
-.logo.big {
-  width: 56px;
-  height: 56px;
-  flex: none;
+.brand .logo {
+  width: 30px;
+  height: 30px;
 }
 
 .saved {
-  position: absolute;
-  right: 0;
-  top: 0;
+  margin-left: auto;
   font-size: 12px;
   font-weight: 700;
   color: var(--accent-text);
@@ -43,31 +42,667 @@ main {
   opacity: 1;
 }
 
-.card {
+.nav {
+  display: grid;
+  gap: 2px;
+}
+
+.nav a {
+  padding: 8px 12px;
+  border-radius: 10px;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.nav a:hover {
+  background: var(--surface-2);
+}
+
+.nav a[aria-current='page'] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.nav a:focus-visible,
+.site-chip:focus-visible,
+.link-btn:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+
+main {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 20px;
+  border-radius: 18px;
   box-shadow: var(--shadow);
+  padding: 28px 32px 32px;
+  min-height: 70vh;
+}
+
+.section {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
-.card h2 {
+.section[hidden] {
+  display: none;
+}
+
+.section-head {
+  display: grid;
+  gap: 6px;
+  max-width: 68ch;
+}
+
+.section-head h1 {
   margin: 0;
-  font-size: 17px;
+  font-size: 22px;
 }
 
-.card h3 {
-  margin: 6px 0 0;
+.section p {
+  margin: 0;
+}
+
+/* Sub-sections (Accounts: Reddit porn bots, Countries; Behaviour: X, Reddit). */
+.section h2 {
+  margin: 10px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  font-size: 15px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ── Filters ────────────────────────────────────────────────────────────── */
+
+/* The sites Deslop runs on, each with its own on/off switch. */
+.sites {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.site-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.site-card-text {
+  display: grid;
+  gap: 1px;
+}
+
+.site-card-text small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-list {
+  display: grid;
+}
+
+.settings-list h2 {
+  margin-bottom: 2px;
+}
+
+/* One setting: its control for every site, its name and description, and
+   the Per site button; the panel of per-site overrides opens below. */
+.setting {
+  border-top: 1px solid var(--border);
+}
+
+.settings-list h2 + .setting {
+  border-top: 0;
+}
+
+.setting-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.setting-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+label.setting-main {
+  cursor: pointer;
+}
+
+.setting-text {
+  flex: 1;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.setting-text small {
+  color: var(--muted);
+  font-size: 12.5px;
+  max-width: 64ch;
+}
+
+.setting-text small:empty {
+  display: none;
+}
+
+/* Strictness: its levels sit under the description. */
+div.setting-main {
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+
+div.setting-main > .setting-text {
+  flex-basis: 100%;
+}
+
+.setting-main > .segmented {
+  flex: 0 1 340px;
+}
+
+.per-site-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 220px;
+  padding: 5px 8px 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.per-site-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.per-site-btn svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  transition: transform 0.15s;
+}
+
+.per-site-btn[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+.per-site-btn:hover {
+  background: var(--surface-2);
+}
+
+.per-site-btn:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+
+/* A setting that some site overrides says so on its button. */
+.has-overrides .per-site-btn {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.per-site {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px 52px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.per-site[hidden] {
+  display: none;
+}
+
+.per-site-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.per-site-name {
+  width: 84px;
+  font-weight: 600;
+  display: grid;
+}
+
+.per-site-name small {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+
+.segmented.small {
+  flex: 1 1 280px;
+  max-width: 420px;
+  background: var(--surface);
+}
+
+.segmented.small button {
+  padding: 4px 8px;
+  font-size: 12.5px;
+}
+
+.foot-note {
+  margin-top: 4px;
+}
+
+.link-btn {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
   font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ── Data ───────────────────────────────────────────────────────────────── */
+
+/* Site colours for the charts: categorical slots checked for colour-blind
+   separation and contrast on this page's surface, stepped for dark mode. */
+.section[data-section='data'] {
+  --series-linkedin: #2a78d6;
+  --series-reddit: #eb6834;
+  --series-x: #1baf7a;
+  --grid: #efe9dc;
+  --axis: #d9cfbb;
+}
+
+@media (prefers-color-scheme: dark) {
+  .section[data-section='data'] {
+    --series-linkedin: #3987e5;
+    --series-reddit: #d95926;
+    --series-x: #199e70;
+    --grid: #2d281f;
+    --axis: #453d30;
+  }
+}
+
+.history[hidden],
+.history-prompt[hidden],
+.tiles[hidden] {
+  display: none;
+}
+
+.history {
+  display: grid;
+  gap: 14px;
+}
+
+.history-toggle {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+
+.stats-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.stats-controls .segmented button {
+  flex: none;
+  padding: 5px 12px;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.tile {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+
+.tile-label,
+.tile-sub {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.tile-value {
+  font-size: 26px;
+  font-weight: 650;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+/* A filter's name rather than a number. */
+.tile-value.words {
+  font-size: 19px;
+  line-height: 1.25;
+}
+
+.chart {
+  position: relative;
+  margin: 6px 0 0;
+  display: grid;
+  gap: 10px;
+}
+
+.chart figcaption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.legend {
+  display: flex;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.legend[hidden] {
+  display: none;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-item i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.plot {
+  position: relative;
+  min-height: 60px;
+}
+
+.plot svg {
+  display: block;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.plot svg:focus-visible,
+.bar-row:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.plot .grid {
+  stroke: var(--grid);
+  stroke-width: 1;
+}
+
+.plot .axis {
+  stroke: var(--axis);
+  stroke-width: 1;
+}
+
+.plot .tick {
+  fill: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.plot .hover-band {
+  fill: var(--surface-2);
+}
+
+.bars {
+  display: grid;
+  gap: 2px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: minmax(7em, 13em) minmax(0, 1fr) 3.5em;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 4px;
+  border-radius: 8px;
+}
+
+.bar-row:hover {
+  background: var(--surface-2);
+}
+
+.bar-label {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A bar's site segments sit 2px apart, rounded only at the far end. */
+.bar {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  min-width: 4px;
+}
+
+.bar i {
+  min-width: 2px;
+}
+
+.bar i:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.bar-value {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltip {
+  position: absolute;
+  z-index: 2;
+  min-width: 140px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.14);
+  font-size: 12.5px;
+  pointer-events: none;
+}
+
+.tooltip[hidden] {
+  display: none;
+}
+
+.tip-title {
+  margin-bottom: 4px;
   color: var(--muted);
 }
 
-.card p {
+.tip-row {
+  display: grid;
+  grid-template-columns: 12px auto 1fr;
+  align-items: center;
+  gap: 6px;
+}
+
+.tip-row i {
+  height: 2px;
+  border-radius: 1px;
+}
+
+.tip-row b {
+  font-variant-numeric: tabular-nums;
+}
+
+.tip-row span {
+  color: var(--muted);
+}
+
+.tip-total {
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px solid var(--border);
+}
+
+.empty-chart {
   margin: 0;
+  padding: 18px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--muted);
+  text-align: center;
+}
+
+.table-view summary {
+  font-size: 12.5px;
+}
+
+.table-view[hidden] {
+  display: none;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.data-table th,
+.data-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table th:first-child {
+  text-align: left;
+  font-weight: 500;
+}
+
+.data-table thead th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* ── Site chips (where a rule, Focus or the country filter applies) ─────── */
+
+.site-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.site-chip {
+  padding: 3px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.site-chip[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+@media (max-width: 760px) {
+  .shell {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 16px 16px 48px;
+  }
+
+  .side {
+    position: static;
+    gap: 10px;
+  }
+
+  .nav {
+    display: flex;
+    overflow-x: auto;
+    gap: 4px;
+    padding-bottom: 4px;
+  }
+
+  .nav a {
+    flex: none;
+  }
+
+  main {
+    padding: 20px 16px 24px;
+  }
+
+  .site-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .setting-head {
+    flex-wrap: wrap;
+  }
+
+  .setting-main > .segmented {
+    flex: 1 1 100%;
+  }
+
+  .per-site {
+    margin-left: 0;
+  }
+
+  .per-site-name {
+    width: 100%;
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+  }
+
+  .bar-row {
+    grid-template-columns: minmax(6em, 9em) minmax(0, 1fr) 3em;
+    gap: 8px;
+  }
 }
 
 .small {
@@ -196,6 +831,7 @@ details[open] summary {
 
 .field {
   display: grid;
+  align-content: start;
   gap: 6px;
   font-size: 13px;
   font-weight: 600;
@@ -211,15 +847,6 @@ details[open] summary {
   .two-col {
     grid-template-columns: 1fr;
   }
-}
-
-.categories {
-  display: grid;
-  gap: 8px;
-}
-
-.categories h3:first-child {
-  margin-top: 0;
 }
 
 .toggles {
@@ -270,8 +897,13 @@ details[open] summary {
   background: var(--surface-2);
 }
 
-.rules li span {
+.rules li > span:first-child {
   flex: 1;
+  min-width: 12ch;
+}
+
+.rules li {
+  flex-wrap: wrap;
 }
 
 .icon-btn {
@@ -358,8 +990,4 @@ input[type='checkbox'].plain {
   accent-color: var(--accent-text);
   width: 16px;
   height: 16px;
-}
-
-footer {
-  text-align: center;
 }

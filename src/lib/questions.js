@@ -460,10 +460,31 @@ export const FOCUS_STRENGTH = {
   strong: 0.55,
 };
 
+// The sites Deslop filters, in the order settings show them.
+export const SITES = [
+  { id: 'x', label: 'X' },
+  { id: 'linkedin', label: 'LinkedIn' },
+  { id: 'reddit', label: 'Reddit' },
+];
+
+// Why some categories start off on a site (see siteDefaults).
+export const SITE_DEFAULT_REASONS = {
+  reddit: "Some filters start off on Reddit, where asking the community and sharing links and stories are what it's for.",
+};
+
 // Categories are what the user sees and toggles. Each one lists the questions
 // it needs (only questions of enabled categories are asked) and turns their
 // answers, or a signal computed in code (`local`, see classify.js), into a
 // single 0..1 value compared against the strictness threshold.
+//
+// Each category has one switch for every site, which starts at `defaultOn`,
+// and sites can override it. `siteDefaults` are overrides a site starts with.
+// Reddit is a forum: asking the community, sharing news links and telling
+// personal stories are what it's for, and its feed shows truncated excerpts,
+// so the engagement, news, hook and personal-brand questions start off there.
+// `minWords` is how many words (title and text, on Reddit) a post needs before
+// its writing style is judged at all: an image's caption or a one-line reply
+// says nothing about who wrote it.
 export const GROUPS = [
   { id: 'slop', label: 'Slop' },
   { id: 'toxic', label: 'Hate & toxicity' },
@@ -478,6 +499,7 @@ export const CATEGORIES = [
     description:
       'Posts that hide the payoff behind replies, comments or DMs, or exist to farm likes and reposts.',
     defaultOn: true,
+    siteDefaults: { reddit: false },
     questions: ['withholds_payoff', 'engagement_farming'],
     value: (a) => Math.max(noul(a.withholds_payoff), noul(a.engagement_farming)),
   },
@@ -488,6 +510,7 @@ export const CATEGORIES = [
     short: 'AI-generated',
     description: 'Posts written in the unmistakable ChatGPT house style.',
     defaultOn: true,
+    minWords: { reddit: 20 },
     questions: ['ai_style'],
     value: (a) => scoreFraction(a.ai_style),
   },
@@ -497,6 +520,7 @@ export const CATEGORIES = [
     label: 'Recycled news',
     description: 'Secondhand recaps of news everyone already covered, with nothing new added.',
     defaultOn: true,
+    siteDefaults: { reddit: false },
     questions: ['news_rehash'],
     value: (a) => noul(a.news_rehash),
   },
@@ -507,6 +531,7 @@ export const CATEGORIES = [
     short: 'Clickbait',
     description: '"This changes everything", "RIP Google", "99% of people don\'t know…".',
     defaultOn: true,
+    siteDefaults: { reddit: false },
     questions: ['clickbait_hook'],
     value: (a) => noul(a.clickbait_hook),
   },
@@ -517,6 +542,7 @@ export const CATEGORIES = [
     short: 'Broetry',
     description: 'Embellished parables and one-line-per-sentence stories that end in a generic lesson.',
     defaultOn: true,
+    siteDefaults: { reddit: false },
     questions: ['hollow_inspiration'],
     value: (a) => noul(a.hollow_inspiration),
   },
@@ -538,6 +564,7 @@ export const CATEGORIES = [
     description:
       'Chronic personal-brand posting: life-journey stories, name-dropping, vulnerability arcs and cliffhangers where the author is the product.',
     defaultOn: true,
+    siteDefaults: { reddit: false },
     questions: ['personal_branding'],
     value: (a) => noul(a.personal_branding),
   },

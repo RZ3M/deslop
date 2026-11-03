@@ -3,7 +3,7 @@
 
 import { QUESTIONS, CATEGORIES, THRESHOLDS, FOCUS_STRENGTH, customRuleQuestion, focusQuestion } from './questions.js';
 
-const PLATFORM_NAMES = { x: 'X (Twitter)', linkedin: 'LinkedIn' };
+const PLATFORM_NAMES = { x: 'X (Twitter)', linkedin: 'LinkedIn', reddit: 'Reddit' };
 const MAX_TEXT = 4000;
 
 // Only the fields the questions need; everything else stays out of the context.
@@ -15,6 +15,8 @@ export function buildState(post) {
       text: clip(unstyle(post.text)),
     },
   };
+  if (post.community) state.post.community = post.community;
+  if (post.kind === 'comment') state.post.kind = 'comment';
   if (fancyFonts(post.text).letters >= FANCY_MIN_LETTERS) {
     state.post.formatting =
       'Parts of the text were written in Unicode bold/italic "fancy font" characters for emphasis; they are shown here as plain letters.';
@@ -33,8 +35,37 @@ export function customRuleId(rule) {
   return `custom_${fnv1a(rule)}`;
 }
 
-export function isCategoryEnabled(settings, cat) {
-  return settings.categories?.[cat.id] ?? cat.defaultOn;
+// Each category has one switch for every site (settings.categories), and a
+// site can override it. Without a site (the test harness), the switch decides.
+export function isCategoryEnabled(settings, cat, platform) {
+  return siteOverride(settings, cat, platform) ?? settings.categories?.[cat.id] ?? cat.defaultOn;
+}
+
+// A site's override: true or false, or null to follow the all-sites switch.
+// Never set means the site's built-in default (siteDefaults in questions.js),
+// so Reddit starts with some categories off while they stay on elsewhere.
+export function siteOverride(settings, cat, platform) {
+  const set = settings.siteOverrides?.[platform]?.[cat.id];
+  return set !== undefined ? set : (cat.siteDefaults?.[platform] ?? null);
+}
+
+// Whether there's enough text to judge the category (see `minWords` in
+// questions.js). `local.words` is the post's word count.
+export function categoryApplies(cat, platform, local = {}) {
+  const min = cat.minWords?.[platform];
+  return !min || (local.words ?? Infinity) >= min;
+}
+
+// A custom rule applies on every site unless it was limited to some.
+export function ruleApplies(settings, rule, platform) {
+  const sites = settings.customRuleSites?.[rule];
+  return !platform || !sites || sites.includes(platform);
+}
+
+// The site's strictness, or the default one.
+export function strictnessFor(settings, platform) {
+  const level = settings.siteStrictness?.[platform] || settings.strictness;
+  return THRESHOLDS[level] ? level : 'balanced';
 }
 
 // Focus mode is on, has interests, and applies to this platform (any platform
@@ -44,6 +75,7 @@ export function focusActive(settings, platform) {
   if (!f?.enabled || !f.interests?.length) return false;
   if (platform === 'x') return f.onX !== false;
   if (platform === 'linkedin') return f.onLinkedIn !== false;
+  if (platform === 'reddit') return f.onReddit !== false;
   return true;
 }
 
@@ -54,14 +86,17 @@ export function buildQuestions(customRules = []) {
   return questions;
 }
 
-// Only the questions the current settings need. Disabled categories cost nothing.
-export function questionsFor(settings, platform) {
+// Only the questions the current settings need. Disabled categories, and
+// those that don't apply to this post, cost nothing.
+export function questionsFor(settings, platform, local = {}) {
   const questions = {};
   for (const cat of CATEGORIES) {
-    if (!isCategoryEnabled(settings, cat)) continue;
+    if (!isCategoryEnabled(settings, cat, platform) || !categoryApplies(cat, platform, local)) continue;
     for (const id of cat.questions) questions[id] = QUESTIONS[id];
   }
-  for (const rule of settings.customRules || []) questions[customRuleId(rule)] = customRuleQuestion(rule);
+  for (const rule of settings.customRules || []) {
+    if (ruleApplies(settings, rule, platform)) questions[customRuleId(rule)] = customRuleQuestion(rule);
+  }
   if (focusActive(settings, platform)) questions.focus = focusQuestion(settings.focus.interests);
   return questions;
 }
@@ -92,22 +127,22 @@ export function questionHash(question) {
 
 // Signals computed in code rather than asked of Jev.
 export function localSignals(post) {
-  return { fancy_fonts: fancyFontScore(post) };
+  return { fancy_fonts: fancyFontScore(post), words: wordCount(`${post.text || ''}\n${post.quoted?.text || ''}`) };
 }
 
 export function verdictFrom(answers, settings, platform, local = {}) {
-  const strictness = THRESHOLDS[settings.strictness] ? settings.strictness : 'balanced';
-  const t = THRESHOLDS[strictness];
+  const t = THRESHOLDS[strictnessFor(settings, platform)];
   const signals = [];
 
   for (const cat of CATEGORIES) {
     const value = cat.value(answers, local);
     const threshold = t[cat.id] ?? t.default;
-    const enabled = isCategoryEnabled(settings, cat);
+    const enabled = isCategoryEnabled(settings, cat, platform) && categoryApplies(cat, platform, local);
     signals.push({ id: cat.id, label: cat.label, value, threshold, enabled, hit: enabled && value >= threshold });
   }
 
   for (const rule of settings.customRules || []) {
+    if (!ruleApplies(settings, rule, platform)) continue;
     const id = customRuleId(rule);
     const a = answers[id];
     const value = a && a.type === 'noul' ? a.noul : 0;

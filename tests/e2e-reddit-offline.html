@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Deslop end-to-end, offline (mock Reddit)</title>
+  <script src="chrome-shim.js"></script>
+  <link rel="stylesheet" href="../src/content/content.css">
+  <style>
+    /* Roughly Reddit's dark theme: cards with their own background, padding,
+       margins and rounded corners, which Deslop's bars should line up with. */
+    body { font: 14px/1.45 system-ui, sans-serif; max-width: 720px; margin: 20px auto; padding: 0 16px; background: #0e1113; color: #d7dadc; }
+    shreddit-post, shreddit-ad-post, shreddit-comment { display: block; }
+    shreddit-post, shreddit-ad-post { margin: 4px 0; padding: 12px 16px; border-radius: 16px; background: #181c1f; }
+    shreddit-feed > hr { border: 0; border-bottom: 1px solid #2a3236; margin: 0; }
+    shreddit-comment { margin: 8px 0 8px 12px; }
+    [slot='title'] { color: #eef1f3; font-size: 18px; font-weight: 600; text-decoration: none; }
+    [slot='commentMeta'] { font-weight: 600; font-size: 12px; color: #8ba2ad; }
+    shreddit-comment[collapsed] > :not([slot='commentMeta']) { display: none; }
+    #report { white-space: pre-wrap; font: 12px/1.5 ui-monospace, Consolas, monospace; background: #181c1f; padding: 10px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Deslop end-to-end, offline (Reddit)</h1>
+  <p>Real <code>background.js</code> + real content scripts on mock Reddit posts and comments that render through shadow DOM like Reddit's, with mock profiles, without calling Jev.</p>
+  <pre id="report">Running…</pre>
+  <main id="page"></main>
+  <script type="module" src="e2e-reddit-offline.js"></script>
+</body>
+</html>
