@@ -320,10 +320,24 @@
     // with a button to hide it again.
     function reveal(container, decision, noun) {
       container.dataset.deslop = 'revealed';
+      container.toggleAttribute('data-deslop-dark', onDarkBackground(container));
       setBar(container, 'Shown', `Deslop hid this — ${why(decision)}`, 'Hide again', () => {
         decision.revealed = false;
         collapse(container, decision, noun);
       });
+    }
+
+    // True when the post is painted on a dark background (X's dark themes):
+    // the first mostly opaque background of the post or an ancestor, through
+    // shadow roots, falling back to the page's.
+    function onDarkBackground(el) {
+      for (let node = el; node; node = node.parentElement || node.getRootNode?.().host) {
+        const m = getComputedStyle(node).backgroundColor.match(/[\d.]+/g);
+        if (!m || (m[3] !== undefined && +m[3] < 0.5)) continue;
+        const [r, g, b] = m.map(Number);
+        return 0.299 * r + 0.587 * g + 0.114 * b < 128;
+      }
+      return false;
     }
 
     function setBar(container, tag, text, label, onClick) {

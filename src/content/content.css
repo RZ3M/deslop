@@ -91,6 +91,23 @@ html:not(.deslop-probe) [data-deslop='collapsed'][data-deslop-outside] {
   mix-blend-mode: darken;
 }
 
+/* On a dark background the cream would wash out light text instead: X's
+   posts sit in transformed cells, so "darken" blends against a transparent
+   backdrop and paints the cream over everything. The background tint and the
+   yellow edge are enough there. */
+[data-deslop='revealed'][data-deslop-dark]::after {
+  content: none !important;
+}
+
+[data-deslop='revealed'][data-deslop-dark] {
+  --deslop-tint: linear-gradient(rgba(255, 204, 77, 0.06), rgba(255, 204, 77, 0.06));
+}
+
+[data-deslop-dark] > .deslop-bar.deslop-revealed {
+  background: rgba(255, 204, 77, 0.08);
+  border-color: rgba(255, 204, 77, 0.35);
+}
+
 .deslop-bar.deslop-revealed {
   border-style: solid;
   border-color: rgba(255, 204, 77, 0.6);
